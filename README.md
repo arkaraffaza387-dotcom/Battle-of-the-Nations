@@ -1,7 +1,7 @@
 
 <html lang="id"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Game Negara Public</title>
+<title>Game Negara Online</title>
 <style>
 :root{--bg:#e6efe0;--card:rgba(255,255,255,.88);--tx:#1d2a1a;--mu:#5b6b55;--ac:#2f9e44;--ac2:#0288d1;--bd:#c5d4bd;--g1:#a6d27a;--g2:#9bc970;--bad:#d32f2f;--w:#6ab7e8;--fo:#6fae52;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0c130a;--card:rgba(28,40,24,.9);--tx:#e8f0e3;--mu:#9aab93;--ac:#51cf66;--ac2:#4dabf7;--bd:#33432f;--g1:#3d6b2a;--g2:#386227;--bad:#ef5350;--w:#2b5f86;--fo:#2f5a22;color-scheme:dark}}
@@ -79,9 +79,6 @@ button:active{transform:scale(.94)}
 .srv:first-child{border-top:0}
 .srv button{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:8px 14px}
 .srv button:disabled{background:var(--bd)}
-.btns{display:flex;flex-direction:column;gap:5px}
-.en button.al{background:linear-gradient(135deg,#2f9e44,#0b7285);box-shadow:0 4px 10px rgba(11,114,133,.4)}
-.cl button:disabled{opacity:.45}
 </style></head><body>
 <div id="app"></div><div id="toast"></div>
 <script>
@@ -108,7 +105,7 @@ var $=function(i){return document.getElementById(i)};
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v);return 1}catch(e){if(v===undefined)return mem[k]||null;if(v===null)delete mem[k];else mem[k]=v;return 0}}
 function toast(t){var e=$("toast");e.textContent=t;e.className="s";clearTimeout(tt);tt=setTimeout(function(){e.className=""},2600)}
 function fmt(n){n=Math.floor(n);var u=[[1e12," T"],[1e9," M"],[1e6," Jt"],[1e3," Rb"]];for(var i=0;i<4;i++)if(n>=u[i][0])return(n/u[i][0]).toFixed(1).replace(".0","")+u[i][1];return""+n}
-function save(){if(S&&S.mode=="pub")cloudSave()}
+function save(){if(S)return ls(S.mode=="pub"?"negara_pub":"negara3",JSON.stringify(S))}
 function saveCfg(){ls("negara_cfg",JSON.stringify(CFG))}
 function load(){
   try{var c=JSON.parse(ls("negara_cfg"));if(c)CFG=c}catch(e){}
@@ -124,9 +121,9 @@ function pick(i,pub){
   if(pub)return S;tab="b";start();
 }
 function rndEn(i){var ix=[],k;for(k=0;k<CS.length;k++)if(k!=i)ix.push(k);for(k=ix.length-1;k>0;k--){var j=Math.floor(Math.random()*(k+1)),t=ix[k];ix[k]=ix[j];ix[j]=t}return ix.slice(0,5).map(function(c,j){return{n:CS[c].n,f:CS[c].f,pw:20+Math.floor(Math.random()*20)+j*12}})}
-function nb(i){var r=[],x=i%8;if(i>7)r.push(i-8);if(i+8<S.t.length)r.push(i+8);if(x>0)r.push(i-1);if(x<7)r.push(i+1);return r}
+function nb(i){var r=[],x=i%8;if(i>7)r.push(i-8);if(i<56)r.push(i+8);if(x>0)r.push(i-1);if(x<7)r.push(i+1);return r}
 function mult(i){var m=1+0.5*(S.lv[i]-1);if(nb(i).some(function(j){return S.t[j]=="r"}))m*=1.25;return m}
-function sum(k){var s=0;for(var i=0;i<S.t.length;i++)if(S.t[i]==k)s+=mult(i);return s}
+function sum(k){var s=0;for(var i=0;i<64;i++)if(S.t[i]==k)s+=mult(i);return s}
 function cap(){return 20+Math.floor(sum("h")*10)}
 function addXp(n){
   S.xp+=n;
@@ -218,13 +215,13 @@ function redeem(){
   if(!v){toast("Masukkan kode dulu");return}
   if(v!="azfermodz"){toast("❌ Kode tidak valid");return}
   var R={};try{R=JSON.parse(ls("negara_redeem"))||{}}catch(e){}
-  if(R.azfermodz||S.rd){toast("⚠️ Kode ini sudah pernah diklaim");return}
-  R.azfermodz=1;S.rd=1;ls("negara_redeem",JSON.stringify(R));
+  if(R.azfermodz){toast("⚠️ Kode ini sudah pernah diklaim");return}
+  R.azfermodz=1;ls("negara_redeem",JSON.stringify(R));
   S.m+=1e11;S.army+=5e11;save();stats();$("code").value="";
   toast("🎁 Berhasil! +100 Miliar uang, +500 Miliar pasukan");
 }
 function setSpd(n){if(S.mode=="pub"&&n==0)n=1;S.spd=n;clearInterval(timer);if(n)timer=setInterval(tick,n==2?600:1500);render()}
-function doSave(){cloudSave();toast("💾 Progres disimpan (Level "+S.lvl+", Hari "+S.day+")")}
+function doSave(){save();toast("💾 Progres disimpan (Level "+S.lvl+", Hari "+S.day+")")}
 function doLoad(){if(S.mode=="pub"){toast("Muat data tidak tersedia di server public");return}var s=load();if(!s){toast("Belum ada data tersimpan");return}S=s;toast("📂 Data dimuat (Level "+S.lvl+")");start()}
 function doDel(){ls("negara3",null);ls("negara2",null);toast("🗑️ Data simpanan dihapus");render()}
 function setTheme(t){CFG.theme=t;saveCfg();applyTheme();render()}
@@ -243,7 +240,7 @@ function render(){
     h+="<div class=card>"+S.en.map(function(e,i){var ch=Math.round(S.army/(S.army+e.pw)*100);return"<div class=en><span class=f>"+e.f+"</span><div><b>"+e.n+"</b> <span class=mu>kekuatan "+fmt(e.pw)+"</span><div class=bar><span style='width:"+ch+"%'></span></div><span class=mu>Peluang menang "+ch+"%</span></div><button onclick=attack("+i+",this)>⚔️ Serang</button></div>"}).join("")+"</div>";
   }else{
     h+="<div class=card><b>💾 Local Config</b><p class=mu>Progres, level, dan pengaturan disimpan di perangkat ini.</p><div class=cfg>"+
-     "<button onclick=doSave()>💾 Simpan ke akun</button><button onclick=changeScreen()>🏳️ Ganti negara</button><button class=dn onclick=logout()>🚪 Keluar akun</button></div>"+
+     "<button onclick=doSave()>💾 Simpan</button><button onclick=doLoad()>📂 Muat</button><button class=dn onclick=doDel()>🗑️ Hapus</button></div>"+
      (S.mode=="pub"?"<div class=cfg><button class=dn onclick=menu()>🚪 Keluar dari server</button></div>":"")+"<div class=cfg><button class='"+(CFG.auto?"on":"")+"' onclick=toggleAuto()>Auto-simpan: "+(CFG.auto?"ON":"OFF")+"</button></div>"+
      "<div class=cfg>"+[["auto","🌓 Otomatis"],["light","☀️ Terang"],["dark","🌙 Gelap"]].map(function(x){return"<button class='"+(CFG.theme==x[0]?"on":"")+"' onclick=setTheme('"+x[0]+"')>"+x[1]+"</button>"}).join("")+"</div></div>"+
      "<div class=card><b>🎁 Redeem Code</b><p class=mu>Masukkan kode hadiah. Setiap kode hanya bisa diklaim 1 kali.</p><div class=code><input id=code placeholder='Masukkan kode' autocomplete=off autocapitalize=off><button onclick=redeem()>Klaim</button></div></div>";
@@ -257,97 +254,77 @@ function render(){
   }
 }
 function start(){clearInterval(timer);render();if(S.spd)timer=setInterval(tick,S.spd==2?600:1500)}
-var CH="join",PEND=null,TAKEN={},ACC=null,DB=true,uid=null,PL=[],hb=null,sig="",ACT=25000,errShown=false,tick5=0,seenReq={};
-var API="https://data-base-fazxy.lovable.app/api/public/v1",KEY="dk_e160867ebfcd422ab19e9cf7942d7d7c";
+var mode="self",target="auto",DB=null,uid=null,PL=[],unsub=null,hb=null,sig="",ACT=25000,NET=null;
 function esc(t){return String(t).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+var API="https://data-base-fazxy.lovable.app/api/public/v1",KEY="dk_e160867ebfcd422ab19e9cf7942d7d7c",errShown=false;
 async function api(method,path,body){
   var h={"x-api-key":KEY};if(body)h["Content-Type"]="application/json";
   var r=await fetch(API+path,{method:method,headers:h,body:body?JSON.stringify(body):undefined});
-  var t=await r.text();
+  var t=await r.text(),j=null;try{j=JSON.parse(t)}catch(e){}
   if(!r.ok){var er=new Error("HTTP "+r.status+" "+t.slice(0,100));er.status=r.status;throw er}
-  try{return JSON.parse(t)}catch(e){return null}
+  return j;
 }
 function nrm(r){
   var g=r.game_stats;if(typeof g=="string"){try{g=JSON.parse(g)}catch(e){g=null}}g=g||{};
-  return{rid:r.id!==undefined?r.id:r._id,uid:r.player_id,sid:r.server_code,name:r.name||"Pemain",cname:r.country,lvl:+r.level||1,m:+r.money||0,
-   seen:+g.seen||Date.parse(r.last_active)||0,army:+g.army||0,land:+g.land||1,joinedAt:+g.joinedAt||0,lastHit:g.lastHit||null,
-   allies:Array.isArray(g.allies)?g.allies:[],tag:g.tag||"",ph:g.ph,save:g.save,gs:g}
+  var ci=CS.findIndex(function(c){return c.n==r.country});
+  return{rid:r.id!==undefined?r.id:r._id,uid:r.player_id,sid:r.server_code,name:r.name||"Pemain",c:ci<0?0:ci,lvl:+r.level||1,m:+r.money||0,
+   seen:+g.seen||Date.parse(r.last_active)||0,army:+g.army||0,land:+g.land||1,joinedAt:+g.joinedAt||0,lastHit:g.lastHit||null}
 }
-async function rows(sc){
-  var j=await api("GET","/players"+(sc?"?server_code="+encodeURIComponent(sc):"")),l=Array.isArray(j)?j:(j&&(j.data||j.rows||j.items))||[];
-  var o=l.map(nrm);return sc?o.filter(function(x){return x.sid==sc}):o;
+async function rowsAll(){
+  var j=await api("GET","/players"),l=Array.isArray(j)?j:(j&&(j.data||j.rows||j.items))||[];
+  return l.map(nrm);
 }
-async function sha(t){try{var b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(t));return Array.from(new Uint8Array(b)).map(function(x){return("0"+x.toString(16)).slice(-2)}).join("")}catch(e){return"w"+hs(t)+hs(t+"x")}}
-function dn(){return ACC.name+"#"+ACC.tag}
-function setAcc(x){ACC={id:x.uid,name:x.name,tag:x.tag,ph:x.ph,rid:x.rid};CFG.name=dn();uid=ACC.id;ls("negara_acc",JSON.stringify({id:ACC.id,ph:ACC.ph}))}
-function loading(t){$("app").innerHTML="<div class=hero><h1>"+t+"</h1><p>Mohon tunggu</p></div>"}
-async function boot(){
-  loading("🌍 Memuat...");
-  var sv=null;try{sv=JSON.parse(ls("negara_acc"))}catch(e){}
-  if(sv){try{var x=(await rows("ACC")).filter(function(r){return r.uid==sv.id&&r.ph==sv.ph})[0];if(x){setAcc(x);return lobby()}}catch(e){toast("Tidak bisa terhubung: "+e.message)}}
-  authScreen("login");
-}
-function authScreen(m){
-  var r=m=="reg";
-  $("app").innerHTML="<div class=hero><h1><span class=globe>🌍</span> GAME NEGARA</h1><p>Server Public · lawan pemain online</p></div><div class=card><b>"+(r?"Buat akun baru":"Masuk akun")+"</b>"+
-   "<input id=au class=nm "+(r?"maxlength=14 placeholder='Username (3-14 huruf/angka)'":"placeholder='Username#1234'")+" autocomplete=off autocapitalize=off>"+
-   "<input id=ap class=nm type=password placeholder='Password (min. 6 karakter)'>"+
-   "<button class=cont onclick="+(r?"register()":"login()")+">"+(r?"Daftar":"Masuk")+"</button>"+
-   "<p class=mu style='text-align:center'>"+(r?"Sudah punya akun? <a href=# onclick=\"authScreen('login');return false\">Masuk</a>":"Belum punya akun? <a href=# onclick=\"authScreen('reg');return false\">Daftar</a>")+"</p>"+
-   (r?"<p class=mu>Username boleh sama dengan orang lain. Setiap akun otomatis dapat kode unik (contoh Budi#4821) dan dikunci password, jadi tidak bisa diambil orang lain. Catat kodenya.</p>":"")+"</div>";
-}
-async function register(){
-  var u=$("au").value.trim(),p=$("ap").value;
-  if(!/^[A-Za-z0-9_ ]{3,14}$/.test(u)){toast("Username 3-14 karakter: huruf, angka, spasi, _");return}
-  if(p.length<6){toast("Password minimal 6 karakter");return}
-  try{
-    var ex=await rows("ACC"),tag,k=0;
-    do{tag=""+(1000+Math.floor(Math.random()*9000));k++}while(k<8&&ex.some(function(x){return x.name.toLowerCase()==u.toLowerCase()&&x.tag==tag}));
-    var id="AC"+Math.random().toString(36).slice(2,12),ph=await sha(id+":"+p);
-    await api("POST","/players",{server_code:"ACC",player_id:id,name:u,country:"-",level:1,money:0,last_active:new Date().toISOString(),game_stats:{ph:ph,tag:tag,save:null}});
-    var x=(await rows("ACC")).filter(function(r){return r.uid==id})[0];
-    if(!x)throw new Error("akun tidak tersimpan");
-    setAcc(x);toast("✅ Akun dibuat: "+dn()+" (catat kode ini!)");lobby();
-  }catch(e){toast("Gagal daftar: "+e.message)}
-}
-async function login(){
-  var v=$("au").value.trim(),p=$("ap").value,i=v.lastIndexOf("#");
-  if(i<1){toast("Format: Username#1234");return}
-  try{
-    var n=v.slice(0,i).toLowerCase(),t=v.slice(i+1).trim();
-    var x=(await rows("ACC")).filter(function(r){return r.name.toLowerCase()==n&&r.tag==t})[0];
-    if(!x){toast("Akun tidak ditemukan");return}
-    if(await sha(x.uid+":"+p)!=x.ph){toast("Password salah");return}
-    setAcc(x);toast("Selamat datang, "+dn());lobby();
-  }catch(e){toast("Gagal masuk: "+e.message)}
-}
-function logout(){
-  clearInterval(timer);
-  if(S&&S.mode=="pub"){cloudSave();leavePub()}
-  S=null;ACC=null;ls("negara_acc",null);authScreen("login");
-}
-function menu(){clearInterval(timer);if(S&&S.mode=="pub"){cloudSave();leavePub()}S=null;lobby()}
-function lobby(){
-  $("app").innerHTML="<div class=hero><h1><span class=globe>🌍</span> GAME NEGARA</h1><p>Server Public · maks 10 pemain</p></div>"+
-   "<div class=card><div class=top><span>👤 <b>"+esc(dn())+"</b></span><button class=bk onclick=logout()>Keluar</button></div></div>"+
-   "<button class='big pu' onclick=\"goServer('auto')\">⚡ Cari Otomatis<small>Masuk server yang sedang ada pemainnya</small></button>"+
-   "<div class=card><b>Gabung dengan ID Server</b><div class=code><input id=sid placeholder='S-XXXX' autocapitalize=characters autocomplete=off><button onclick=joinById()>Gabung</button></div><div class=cfg><button onclick=\"goServer('new')\">➕ Buat server baru</button></div></div>"+
-   "<div class=card><div class=top><b>Daftar server</b><button class=bk onclick=refreshServers()>⟳</button></div><div id=sl class=mu>Memuat...</div></div>"+
-   "<p><button class=bk onclick=testApi()>🔧 Tes koneksi</button> <span id=tr class=mu></span></p>";
-  refreshServers();
+async function initNet(){
+  uid=ls("negara_uid")||("u"+Math.random().toString(36).slice(2,10));ls("negara_uid",uid);DB=true;
 }
 async function testApi(){
   var el=$("tr");if(el)el.textContent="menguji...";
-  try{var l=await rows();toast("✅ Terhubung ke Datakit ("+l.length+" baris)");if($("tr"))$("tr").textContent="OK · "+l.length+" baris"}
+  try{var l=await rowsAll();toast("✅ Terhubung ke Datakit ("+l.length+" baris)");if($("tr"))$("tr").textContent="OK · "+l.length+" baris"}
   catch(e){toast("❌ "+e.message);if($("tr"))$("tr").textContent=e.message}
 }
-function joinById(){var v=$("sid").value.trim().toUpperCase();if(!v){toast("Masukkan ID server");return}goServer(v)}
-function pickSrv(id){goServer(id)}
+NET=initNet();
+function menu(){
+  clearInterval(timer);
+  if(S&&S.mode=="pub"){if(CFG.auto)save();leavePub();S=load()}
+  else if(S&&CFG.auto)save();
+  lobby();
+}
+function lobby(){
+  CFG.name=CFG.name||("Pemain"+(100+Math.floor(Math.random()*900)));
+  $("app").innerHTML="<div class=hero><h1><span class=globe>🌍</span> GAME NEGARA</h1><p>Lobby · pilih mode permainan</p></div>"+
+   "<div class=card><span class=mu>Nama panggilan</span><input class=nm maxlength=14 value=\""+esc(CFG.name)+"\" oninput=\"CFG.name=this.value.slice(0,14)||'Pemain';saveCfg()\"></div>"+
+   "<button class='big pu' onclick=pubScreen()>🌐 Server Public<small>Lawan pemain online, otomatis cari server (maks 10 pemain)</small></button>"+
+   "<button class='big se' onclick=\"mode='self';countryScreen()\">🤖 Self<small>Main sendiri melawan komputer</small></button>"+
+   (S?"<button class=cont onclick=start()>▶ Lanjutkan "+CS[S.c].f+" "+CS[S.c].n+" (Level "+S.lvl+")</button>":"");
+}
+function countryScreen(){
+  $("app").innerHTML="<div class=card><div class=top><b>"+(mode=="pub"?"🌐 Pilih negara · Public":"🤖 Pilih negara · Self")+"</b><button class=bk onclick="+(mode=="pub"?"pubScreen()":"lobby()")+">←</button></div><input id=q class=search placeholder='🔎 Cari negara (mis. jepang)' oninput=showList() autocomplete=off><p class=mu id=qc></p></div><div class=cl id=cl></div>";
+  showList();
+}
+function showList(){
+  var q=$("q").value.toLowerCase().trim(),h="",n=0;
+  CS.forEach(function(c,i){if(c.n.toLowerCase().indexOf(q)<0)return;n++;h+="<button onclick=chooseC("+i+")><span class=f>"+c.f+"</span><b>"+c.n+"</b><br><span class=mu>"+c.d+"</span></button>"});
+  $("cl").innerHTML=h||"<p class=mu>Negara tidak ditemukan</p>";$("qc").textContent=n+" negara";
+}
+function chooseC(i){if(mode=="pub")joinPub(i);else pick(i)}
+async function pubScreen(){
+  mode="pub";
+  $("app").innerHTML="<div class=card><div class=top><b>🌐 Server Public</b><button class=bk onclick=lobby()>←</button></div><p class=mu id=ns>Menghubungkan...</p></div>";
+  await NET;
+  $("ns").innerHTML="Database: Datakit · <button class=bk onclick=testApi()>🔧 Tes koneksi</button> <span id=tr></span>";
+  $("app").innerHTML+="<button class='big pu' onclick=\"target='auto';countryScreen()\">⚡ Cari Otomatis<small>Masuk ke server yang sedang ada pemainnya</small></button>"+
+   "<div class=card><b>Gabung dengan ID Server</b><div class=code><input id=sid placeholder='S-XXXX' autocapitalize=characters autocomplete=off><button onclick=joinById()>Gabung</button></div><div class=cfg><button onclick=\"target='new';countryScreen()\">➕ Buat server baru</button></div></div>"+
+   "<div class=card><div class=top><b>Daftar server</b><button class=bk onclick=refreshServers()>⟳</button></div><div id=sl class=mu>Memuat...</div></div>";
+  refreshServers();
+}
+function joinById(){var v=$("sid").value.trim().toUpperCase();if(!v){toast("Masukkan ID server");return}target=v;countryScreen()}
+function pickSrv(id){target=id;countryScreen()}
 function isAct(x){return x&&Date.now()-x.seen<ACT}
 async function listServers(){
-  var all=(await rows()).filter(function(x){return x.sid!="ACC"}),g={};
-  all.forEach(function(x){if(isAct(x))g[x.sid]=(g[x.sid]||0)+1});
-  all.filter(function(x){return Date.now()-x.seen>120000}).slice(0,5).forEach(function(x){api("DELETE","/players/"+x.rid).catch(function(){})});
+  var all=await rowsAll(),g={};
+  all.forEach(function(x){if(isAct(x)){g[x.sid]=(g[x.sid]||0)+1}});
+  var st=all.filter(function(x){return Date.now()-x.seen>120000}).slice(0,5);
+  st.forEach(function(x){api("DELETE","/players/"+x.rid).catch(function(){})});
   return Object.keys(g).map(function(k){return{id:k,n:g[k]}}).sort(function(a,b){return b.n-a.n});
 }
 async function refreshServers(){
@@ -357,105 +334,51 @@ async function refreshServers(){
     el.innerHTML=l.length?l.map(function(x){return"<div class=srv><span>🖥️ <b>"+esc(x.id)+"</b> · "+x.n+"/10 pemain</span><button "+(x.n>=10?"disabled":"")+" onclick=pickSrv('"+esc(x.id)+"')>"+(x.n>=10?"Penuh":"Gabung")+"</button></div>"}).join(""):"Belum ada server aktif. Pakai Cari Otomatis untuk membuat yang baru.";
   }catch(e){if($("sl"))$("sl").textContent="Gagal memuat: "+e.message}
 }
-function takenMap(l){var t={};l.forEach(function(x){if(x.uid!=uid&&isAct(x)){var ci=CS.findIndex(function(c){return c.n==x.cname});if(ci>=0)t[ci]=x.name}});return t}
-async function goServer(t){
-  loading("🔎 Mencari server...");
+function myRow(now){return{server_code:S.sid,player_id:uid,name:CFG.name,country:CS[S.c].n,level:S.lvl,money:Math.floor(S.m),last_active:new Date(now).toISOString(),
+  game_stats:{army:Math.floor(S.army),land:S.land,joinedAt:S.joinedAt,seen:now,lastHit:S.myHit||null}}}
+async function joinPub(ci){
+  await NET;
+  $("app").innerHTML="<div class=hero><h1>🔎 Mencari server...</h1><p>Mohon tunggu</p></div>";
   try{
-    var all=(await rows()).filter(function(x){return x.sid!="ACC"}),act=all.filter(isAct),cnt={};
+    var all=await rowsAll(),act=all.filter(isAct),cnt={};
     act.forEach(function(x){cnt[x.sid]=(cnt[x.sid]||0)+1});
-    var sid=t;
+    var sid=target;
     if(sid=="auto"){var ks=Object.keys(cnt).filter(function(k){return cnt[k]<10}).sort(function(a,b){return cnt[b]-cnt[a]});sid=ks.length?ks[0]:"new"}
     if(sid=="new")sid="S-"+Math.random().toString(36).slice(2,6).toUpperCase();
-    else if(!cnt[sid]){toast("Server "+sid+" tidak ditemukan atau kosong");return lobby()}
-    else if(cnt[sid]>=10&&!act.some(function(x){return x.sid==sid&&x.uid==uid})){toast("Server penuh (10/10)");return lobby()}
-    PEND={sid:sid};TAKEN=takenMap(act.filter(function(x){return x.sid==sid}));CH="join";countryScreen();
-  }catch(e){toast("Gagal: "+e.message);lobby()}
-}
-function countryScreen(){
-  var sid=CH=="join"?PEND.sid:S.sid;
-  $("app").innerHTML="<div class=card><div class=top><b>"+(CH=="join"?"Pilih negara":"Ganti negara")+" · "+esc(sid)+"</b><button class=bk onclick="+(CH=="join"?"lobby()":"render()")+">←</button></div><p class=mu>Negara yang dipakai pemain lain dikunci 🔒 sampai pemainnya keluar atau ganti negara.</p><input id=q class=search placeholder='🔎 Cari negara (mis. jepang)' oninput=showList() autocomplete=off><p class=mu id=qc></p></div><div class=cl id=cl></div>";
-  showList();
-}
-function showList(){
-  var q=$("q").value.toLowerCase().trim(),h="",n=0;
-  CS.forEach(function(c,i){if(c.n.toLowerCase().indexOf(q)<0)return;n++;var tk=TAKEN[i];h+="<button "+(tk?"disabled":"")+" onclick=chooseC("+i+")><span class=f>"+c.f+"</span><b>"+c.n+"</b><br><span class=mu>"+(tk?"🔒 "+esc(tk):c.d)+"</span></button>"});
-  $("cl").innerHTML=h||"<p class=mu>Negara tidak ditemukan</p>";$("qc").textContent=n+" negara";
-}
-function chooseC(i){if(CH=="change")doChange(i);else joinPub(i)}
-async function changeScreen(){
-  try{TAKEN=takenMap(await rows(S.sid));CH="change";countryScreen()}catch(e){toast("Gagal: "+e.message)}
-}
-async function doChange(i){
-  try{
-    var tk=takenMap(await rows(S.sid))[i];
-    if(tk){toast("Negara itu dipakai "+tk);TAKEN=takenMap(await rows(S.sid));return countryScreen()}
-    S.c=i;tab="b";await pollNet();render();toast("🏳️ Sekarang kamu memakai "+CS[i].n);
-  }catch(e){toast("Gagal: "+e.message)}
-}
-function pack(){return{c:S.c,m:S.m,food:S.food,pop:S.pop,army:S.army,day:S.day,land:S.land,xp:S.xp,lvl:S.lvl,
-  t:S.t.map(function(x){return x||"."}).join(""),lv:S.lv.join(""),ter:S.ter.join(""),al:S.allies||[],rd:S.rd?1:0}}
-function unpack(v){
-  try{
-    if(!v||typeof v.t!="string"||v.t.length%8||v.lv.length!=v.t.length||v.ter.length!=v.t.length)return null;
-    return{c:v.c,m:+v.m,food:+v.food,pop:+v.pop,army:+v.army,day:+v.day,land:+v.land,xp:+v.xp,lvl:+v.lvl,
-     t:v.t.split("").map(function(x){return x=="."?"":x}),lv:v.lv.split("").map(Number),ter:v.ter.split("").map(Number),
-     sel:"h",spd:1,allies:v.al||[],rd:v.rd,mode:"pub",en:[]}
-  }catch(e){return null}
-}
-function ensureMap(){
-  var need=(8+(S.land-1))*8;
-  while(S.t.length<need){for(var k=0;k<8;k++){var r=Math.random();S.t.push("");S.lv.push(1);S.ter.push(r<.1?1:r<.28?2:0)}}
-}
-async function cloudSave(){
-  if(!ACC||!ACC.rid||!S||S.mode!="pub")return;
-  try{await api("PATCH","/players/"+ACC.rid,{level:S.lvl,money:Math.floor(S.m),last_active:new Date().toISOString(),game_stats:{ph:ACC.ph,tag:ACC.tag,save:pack()}})}catch(e){}
-}
-function myRow(now){return{server_code:S.sid,player_id:uid,name:ACC.name,country:CS[S.c].n,level:S.lvl,money:Math.floor(S.m),last_active:new Date(now).toISOString(),
-  game_stats:{army:Math.floor(S.army),land:S.land,joinedAt:S.joinedAt,seen:now,lastHit:S.myHit||null,allies:S.allies||[],tag:ACC.tag}}}
-async function joinPub(ci){
-  var sid=PEND.sid;loading("🔎 Masuk server...");
-  try{
-    var all=await rows(sid),act=all.filter(isAct),mine=all.filter(function(x){return x.uid==uid});
-    var tk=takenMap(act)[ci];
-    if(tk){toast("Negara itu baru dipakai "+tk);TAKEN=takenMap(act);return countryScreen()}
-    if(act.length>=10&&!mine.some(isAct)){toast("Server penuh (10/10)");return lobby()}
-    var ax=(await rows("ACC")).filter(function(r){return r.uid==uid})[0];
-    S=unpack(ax&&ax.save)||pick(ci,true);
-    S.c=ci;S.mode="pub";S.en=[];S.sid=sid;S.hitSeen=Date.now();S.spd=1;S.joinedAt=Date.now();S.rid=null;S.myHit=null;S.allies=S.allies||[];ensureMap();
-    if(mine[0])await api("PATCH","/players/"+mine[0].rid,myRow(Date.now()));else await api("POST","/players",myRow(Date.now()));
-    var l=(await rows(sid)).filter(isAct).sort(function(a,b){return a.joinedAt-b.joinedAt}),me=l.filter(function(x){return x.uid==uid})[0];
-    var clash=l.filter(function(x){return x.uid!=uid&&x.cname==CS[ci].n&&(x.joinedAt<S.joinedAt||(x.joinedAt==S.joinedAt&&x.uid<uid))})[0];
-    if(clash||l.indexOf(me)>=10){
-      if(me)api("DELETE","/players/"+me.rid).catch(function(){});
-      S=null;toast(clash?"Negara itu baru diambil "+clash.name:"Server penuh (10/10)");
-      if(clash){TAKEN=takenMap(l);return countryScreen()}return lobby();
-    }
-    tab="b";errShown=false;tick5=0;startNet();start();
+    else if(!cnt[sid]){toast("Server "+sid+" tidak ditemukan atau kosong");return pubScreen()}
+    var mine=all.filter(function(x){return x.uid==uid});
+    if((cnt[sid]||0)>=10&&!mine.some(function(x){return x.sid==sid&&isAct(x)})){toast("Server penuh (10/10)");return pubScreen()}
+    mine.forEach(function(x){if(x.sid!=sid)api("DELETE","/players/"+x.rid).catch(function(){})});
+    var sv=null;try{sv=JSON.parse(ls("negara_pub"))}catch(e){}
+    S=(sv&&sv.mode=="pub"&&sv.c==ci&&sv.lv)?sv:pick(ci,true);
+    S.mode="pub";S.en=[];S.sid=sid;S.hitSeen=Date.now();S.spd=1;S.joinedAt=Date.now();S.rid=null;S.myHit=null;
+    var ex=mine.filter(function(x){return x.sid==sid})[0];
+    if(ex)await api("PATCH","/players/"+ex.rid,myRow(Date.now()));else await api("POST","/players",myRow(Date.now()));
+    var l=(await rowsAll()).filter(function(x){return x.sid==sid&&isAct(x)}).sort(function(a,b){return a.joinedAt-b.joinedAt});
+    var ix=l.findIndex(function(x){return x.uid==uid});
+    if(ix>=10){if(l[ix])api("DELETE","/players/"+l[ix].rid).catch(function(){});S=load();toast("Server penuh (10/10)");return pubScreen()}
+    tab="w";errShown=false;startNet();start();
     toast("🌐 Masuk server "+sid);
-  }catch(e){S=null;toast("Gagal terhubung: "+e.message);lobby()}
-}
-function relOf(x){
-  var a=S.allies.indexOf(x.uid)>=0,b=x.allies.indexOf(uid)>=0;
-  return a&&b?"ally":b?"in":a?"out":"none";
+  }catch(e){S=load();toast("Gagal terhubung: "+e.message);pubScreen()}
 }
 async function pollNet(){
   if(!S||S.mode!="pub")return;
   try{
     var now=Date.now();
     if(S.rid)await api("PATCH","/players/"+S.rid,myRow(now));
-    var all=await rows(S.sid);PL=[];
+    var all=(await rowsAll()).filter(function(x){return x.sid==S.sid});
+    PL=[];
     all.forEach(function(x){
       if(x.uid==uid){S.rid=x.rid;var h=x.lastHit;if(h&&h.t>(S.hitSeen||0)){S.hitSeen=h.t;S.myHit=h;S.army=Math.max(0,S.army-h.la);S.m=Math.max(0,S.m-h.loot);S.land=Math.max(1,S.land-(h.land||0));toast("🔥 "+h.by+" menyerangmu! -"+fmt(h.loot)+" uang, -"+fmt(h.la)+" pasukan")}}
-      else if(isAct(x)){PL.push(x);if(relOf(x)=="in"&&!seenReq[x.uid]){seenReq[x.uid]=1;toast("🤝 "+x.name+" mengajak bersekutu (buka tab Perang)")}}
+      else if(isAct(x))PL.push(x);
     });
     if(!S.rid)await api("POST","/players",myRow(now));
-    if(++tick5%5==0)cloudSave();
     errShown=false;netChanged();
   }catch(e){if(!errShown){errShown=true;toast("Koneksi server bermasalah: "+e.message)}}
 }
 function startNet(){PL=[];sig="";clearInterval(hb);pollNet();hb=setInterval(pollNet,6000)}
 function netChanged(){
-  var g=PL.map(function(x){return x.uid+x.army+x.land+relOf(x)}).join("|");
+  var g=PL.map(function(x){return x.uid+x.army+x.land}).join("|");
   svUpd();
   if(g!=sig){sig=g;if(S&&S.mode=="pub"&&tab=="w"&&$("app"))render()}
 }
@@ -464,46 +387,32 @@ function leavePub(){
   if(S&&S.rid)api("DELETE","/players/"+S.rid).catch(function(){});
   PL=[];
 }
-function svUpd(){var el=$("sv");if(el&&S&&S.mode=="pub")el.innerHTML="🌐 Server <b>"+esc(S.sid)+"</b> · "+(PL.length+1)+"/10 pemain · 🤝 "+PL.filter(function(x){return relOf(x)=="ally"}).length+" sekutu · 🗺️ "+S.t.length/8+" baris"}
+function svUpd(){var el=$("sv");if(el&&S&&S.mode=="pub")el.innerHTML="🌐 Server <b>"+esc(S.sid)+"</b> · "+(PL.length+1)+"/10 pemain online"}
 function pubWar(){
-  var me={uid:uid,name:ACC.name,tag:ACC.tag,c:CS.findIndex(function(c){return c.n==CS[S.c].n}),army:S.army,land:S.land,lvl:S.lvl,me:1};
+  var me={uid:uid,name:CFG.name+" (kamu)",c:S.c,army:S.army,land:S.land,lvl:S.lvl,me:1};
   var all=PL.concat([me]).sort(function(a,b){return b.army-a.army});
   return"<div class=card><b>🏆 Peringkat · "+esc(S.sid)+"</b>"+all.map(function(p,i){
-    var c=CS.filter(function(z){return z.n==p.cname})[0]||CS[p.c]||CS[0],bt="",rl=p.me?"":relOf(p),ix=PL.indexOf(p);
-    if(!p.me){
-      if(rl=="ally")bt="<button class=al onclick=ally("+ix+",'cut')>🤝 Putus</button>";
-      else if(rl=="in")bt="<button class=al onclick=ally("+ix+",'acc')>✅ Terima</button><button onclick=attackP("+ix+",this)>⚔️ Serang</button>";
-      else if(rl=="out")bt="<button class=al onclick=ally("+ix+",'cut')>⏳ Batal</button><button onclick=attackP("+ix+",this)>⚔️ Serang</button>";
-      else bt="<button onclick=attackP("+ix+",this)>⚔️ Serang</button><button class=al onclick=ally("+ix+",'ask')>🤝 Ajak</button>";
-    }
-    return"<div class=en><span class=f>"+(p.me?CS[S.c].f:c.f)+"</span><div><b>"+(i+1)+". "+esc(p.name)+(p.tag?"#"+esc(p.tag):"")+(rl=="ally"?" 🤝":"")+"</b><br><span class=mu>"+(p.me?CS[S.c].n:esc(p.cname||""))+" · ⚔️ "+fmt(p.army)+" · 🗺️ "+p.land+" · Lv "+p.lvl+"</span></div><div class=btns>"+bt+"</div></div>"}).join("")+"</div>"+
+    var c=CS[p.c]||CS[0];
+    return"<div class=en><span class=f>"+c.f+"</span><div><b>"+(i+1)+". "+esc(p.name)+"</b><br><span class=mu>⚔️ "+fmt(p.army)+" · 🗺️ "+p.land+" · Lv "+p.lvl+"</span></div>"+(p.me?"":"<button onclick=attackP("+PL.indexOf(p)+",this)>⚔️ Serang</button>")+"</div>"}).join("")+"</div>"+
     (PL.length?"":"<p class=mu>Menunggu pemain lain bergabung. Bagikan ID server <b>"+esc(S.sid)+"</b> ke temanmu.</p>");
-}
-function ally(i,act){
-  var t=PL[i];if(!t)return;
-  if(act=="cut"){S.allies=S.allies.filter(function(u){return u!=t.uid});toast("Aliansi dengan "+t.name+" dibatalkan")}
-  else{if(S.allies.indexOf(t.uid)<0)S.allies.push(t.uid);toast(act=="ask"?"🤝 Ajakan dikirim ke "+t.name:"✅ Kamu bersekutu dengan "+t.name)}
-  pollNet().then(render);
 }
 async function attackP(i,btn){
   var t=PL[i];if(!t)return;
-  if(relOf(t)=="ally"){toast("Tidak bisa menyerang sekutu. Putus aliansi dulu.");return}
   if(S.army<5){toast("Pasukan terlalu sedikit. Bangun Barak dulu.");return}
   btn.closest(".en").classList.add("shake");
   try{
-    var x=(await rows(S.sid)).filter(function(r){return r.uid==t.uid})[0];
+    var x=(await rowsAll()).filter(function(r){return r.sid==S.sid&&r.uid==t.uid})[0];
     if(!isAct(x)){toast("Pemain sudah offline");return}
     if(Math.random()<S.army/(S.army+x.army+1)){
       var loot=Math.floor(x.m*0.1),la=Math.floor(x.army*0.4);
-      S.army=Math.max(0,S.army-Math.floor(x.army*0.3));S.m+=loot;S.land++;ensureMap();addXp(60);
-      await api("PATCH","/players/"+x.rid,{game_stats:Object.assign({},x.gs,{lastHit:{t:Date.now(),by:dn(),la:la,loot:loot,land:1}})});
-      toast("🎉 Menang lawan "+x.name+"! +"+fmt(loot)+" uang, peta bertambah 1 baris");
+      S.army=Math.max(0,S.army-Math.floor(x.army*0.3));S.m+=loot;S.land++;addXp(60);
+      await api("PATCH","/players/"+x.rid,{game_stats:{army:x.army,land:x.land,joinedAt:x.joinedAt,seen:x.seen,lastHit:{t:Date.now(),by:CFG.name,la:la,loot:loot,land:1}}});
+      toast("🎉 Menang lawan "+x.name+"! +"+fmt(loot)+" uang, +1 wilayah");
     }else{
       var l=Math.floor(S.army*0.4);S.army-=l;toast("💥 Kalah dari "+x.name+"! Pasukan hilang "+fmt(l));
     }
   }catch(e){toast("Serangan gagal: "+e.message)}
   render();
-}
-document.addEventListener("visibilitychange",function(){if(document.hidden&&S&&CFG.auto)save()});
-load();S=null;applyTheme();boot();
+}document.addEventListener("visibilitychange",function(){if(document.hidden&&S&&CFG.auto)save()});
+S=load();applyTheme();lobby();
 </script></body></html>
