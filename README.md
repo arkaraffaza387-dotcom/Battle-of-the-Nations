@@ -369,6 +369,10 @@ async function loadOnlinePlayers(){
 
 /* ===== GAME ===== */
 function pick(i,pub){
+  if(pub && window._taken && window._taken[CS[i].n]){
+    toast("Negara sudah dipakai "+window._taken[CS[i].n]);return;
+  }
+
   const c=CS[i];const ter=[];
   for(let k=0;k<64;k++){const r=Math.random();ter.push(r<.1?1:r<.28?2:0)}
   S={c:i,m:c.m,food:100,pop:c.p,army:c.a,t:Array(64).fill(""),lv:Array(64).fill(1),ter,day:1,land:1,sel:"h",xp:0,lvl:1,en:rndEn(i),win_streak:0,mode:pub?"pub":"self",sid:pub||null};
@@ -377,6 +381,22 @@ function pick(i,pub){
   if(S.mode==="pub"){cloudSave();loadOnlinePlayers()}
 }
 function rndEn(i){const ix=CS.map((_,k)=>k).filter(k=>k!==i);for(let k=ix.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[ix[k],ix[j]]=[ix[j],ix[k]]}return ix.slice(0,5).map((c,j)=>({n:CS[c].n,f:CS[c].f,pw:20+Math.floor(Math.random()*20)+j*12}))}
+
+function growMap(n){
+  if(!S)return;
+  for(let k=0;k<n;k++){
+    const r=Math.random();
+    S.t.push("");S.lv.push(1);S.ter.push(r<.1?1:r<.28?2:0);
+  }
+}
+function shrinkMap(n){
+  if(!S)return;
+  n=n||1;
+  for(let k=0;k<n;k++){
+    if(S.t.length>16){S.t.pop();S.lv.pop();S.ter.pop()}
+  }
+}
+
 function sum(k){let s=0;for(let i=0;i<S.t.length;i++)if(S.t[i]===k)s+=(1+0.5*(S.lv[i]-1));return s}
 function cap(){return 20+Math.floor(sum("h")*10)}
 function tick(){
@@ -430,12 +450,12 @@ function attackAI(i){
   if(Math.random()<S.army/(S.army+e.pw)){
     const gain=Math.floor(e.pw*10);
     S.army=Math.max(0,S.army-Math.floor(e.pw*0.3));
-    S.m+=gain;S.land++;e.pw=Math.max(15,e.pw*0.7);
+    S.m+=gain;S.land=(S.land||1)+1;growMap(5);e.pw=Math.max(15,e.pw*0.7);
     S.win_streak=(S.win_streak||0)+1;
     if(S.win_streak>=3){S.win_streak=0;S.xp=(S.xp||0)+1;S.lvl=Math.max(S.lvl,Math.floor(S.xp/10)+1);toast("🎉 Menang AI! +"+fmt(gain)+" · ⭐ +1 Exp")}
     else toast("🎉 Menang AI! +"+fmt(gain));
     cloudSave();
-  }else{S.army=Math.floor(S.army*0.5);S.win_streak=0;toast("💥 Kalah dari AI")}
+  }else{S.army=Math.floor(S.army*0.5);S.land=Math.max(1,(S.land||1)-1);shrinkMap(5);S.win_streak=0;toast("💥 Kalah dari AI · -5 kotak")}
   render();
 }
 
@@ -453,36 +473,39 @@ async function attackPlayer(pid){
   await new Promise(r=>setTimeout(r,400));
 
   if(Math.random()<chance){
-    // MENANG
+    // MENANG: ambil 1 wilayah = +5 kotak, musuh -1 wilayah / -5 kotak (via land)
     const loot=Math.floor(tMoney*0.12);
     const dmg=Math.floor(tArmy*0.35);
     const myLoss=Math.floor(tArmy*0.2);
     S.army=Math.max(0,S.army-myLoss);
     S.m+=loot;
-    S.land++;
+    S.land=(S.land||1)+1;
+    growMap(5);
     S.win_streak=(S.win_streak||0)+1;
     if(S.win_streak>=3){
       S.win_streak=0;
       S.xp=(S.xp||0)+1;
-      S.lvl=Math.max(S.lvl,Math.floor(S.xp/10)+1);
-      toast("🎉 Menang lawan "+tName+"! +"+fmt(loot)+" · ⭐ +1 Exp");
-    }else toast("🎉 Menang lawan "+tName+"! +"+fmt(loot)+" uang");
+      S.lvl=Math.max(S.lvl||1,Math.floor((S.xp||0)/100)+1);
+      toast("🎉 Menang vs "+tName+"! +"+fmt(loot)+" · +5 kotak · ⭐ +1 Exp");
+    }else toast("🎉 Menang vs "+tName+"! +"+fmt(loot)+" · +5 kotak");
 
-    // update musuh di database
     try{
+      const tLand=Math.max(1,((target.game_stats||{}).land||1)-1);
       await api("PATCH",API_STATS+"?id="+target.id,KEY_STATS,{
         army:Math.max(0,(target.army||0)-dmg),
         money:Math.max(0,(target.money||0)-loot),
-        game_stats:{...(target.game_stats||{}),last_hit_by:ACC?.name,last_hit_at:new Date().toISOString()}
+        game_stats:{...(target.game_stats||{}),land:tLand,last_hit_by:ACC?.name,last_hit_at:new Date().toISOString(),lost_tiles:5}
       });
     }catch(e){}
     await cloudSave();
   }else{
-    // KALAH
+    // KALAH: -5 kotak
     const loss=Math.floor(S.army*0.4);
     S.army=Math.max(0,S.army-loss);
+    S.land=Math.max(1,(S.land||1)-1);
+    shrinkMap(5);
     S.win_streak=0;
-    toast("💥 Kalah dari "+tName+"! Pasukan -"+fmt(loss));
+    toast("💥 Kalah dari "+tName+"! -"+fmt(loss)+" pasukan · -5 kotak");
     await cloudSave();
   }
   await loadOnlinePlayers();
@@ -514,7 +537,7 @@ function render(){
 
   if(tab==="b"){
     h+=`<div class="bgrid">${Object.keys(B).map(k=>`<button class="${S.sel===k?'on':''}" onclick="S.sel='${k}';render()"><span style="font-size:20px">${B[k].e}</span><br>${B[k].n}</button>`).join("")}</div>`;
-    h+=`<div class="grid" id="grid">${S.t.map((x,i)=>`<div data-i="${i}" style="background:${S.ter[i]===1?'#6ab7e8':S.ter[i]===2&&!x?'#6fae52':((i%8+Math.floor(i/8))%2?'#a6d27a':'#9bc970')}">${x?B[x].e:(S.ter[i]===1?'🌊':S.ter[i]===2?'🌲':'')}</div>`).join("")}</div>`;
+    const cols=8;h+=`<div class="grid" id="grid" style="grid-template-columns:repeat(${cols},1fr)">${S.t.map((x,i)=>`<div data-i="${i}" style="background:${S.ter[i]===1?'#6ab7e8':S.ter[i]===2&&!x?'#6fae52':((i%cols+Math.floor(i/cols))%2?'#a6d27a':'#9bc970')}">${x?B[x].e:(S.ter[i]===1?'🌊':S.ter[i]===2?'🌲':'')}</div>`).join("")}</div><p class="mu">Wilayah: ${S.land||1} · Kotak peta: ${S.t.length}</p>`;
   }else if(tab==="w"){
     if(S.mode==="pub"){
       // PvP - real players
@@ -614,27 +637,57 @@ async function joinServer(code,minLv){
   const servers=await listServers();
   const s=servers.find(x=>x.code===code);
   if(!s)return toast("Server tidak ditemukan / sudah mati");
+  // cek kapasitas 197
+  try{
+    const list=arr(await api("GET",API_STATS,KEY_STATS));
+    const online=new Set();
+    list.forEach(p=>{
+      const gs=p.game_stats||{};
+      if(gs.server===code && p.player_id!==uid) online.add(p.player_id);
+    });
+    if(online.size>=197)return toast("Server penuh (197/197 negara)");
+  }catch(e){}
   currentServer=s;countryScreen(code);
 }
-function countryScreen(pub){
+async function countryScreen(pub){
   window._pubCountry = pub;
-  let h=`<div class="card"><div style="display:flex;justify-content:space-between"><b>${pub?"Pilih Negara · "+pub:"Pilih Negara · Self"}</b>
+  window._taken = {};
+  $("app").innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between"><b>${pub?"Pilih Negara · "+pub:"Pilih Negara · Self"}</b>
   <button class="btn-gray" style="padding:4px 10px" onclick="${pub?"serverScreen()":"lobby()"}">←</button></div>
-  <p class="mu">${pub?"Pemain di server yang sama bisa saling serang.":"Mode latihan lawan AI."} · ${CS.length} negara</p>
+  <p class="mu">${pub?"Negara yang sudah dipakai pemain lain terkunci 🔒. Maks 197 pemain/server.":"Mode latihan lawan AI."} · ${CS.length} negara</p>
   <input id="qNegara" placeholder="🔎 Cari negara..." oninput="filterNegara()" style="margin-top:8px"></div>
-  <div id="listNegara" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>`;
-  $("app").innerHTML=h;
+  <div id="listNegara" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><p class="mu">Memuat...</p></div>`;
+  if(pub){
+    try{
+      const list=arr(await api("GET",API_STATS,KEY_STATS));
+      const map={};
+      list.forEach(p=>{
+        if(p.player_id===uid)return;
+        const gs=p.game_stats||{};
+        if(gs.server===pub && gs.country){
+          map[gs.country]=(gs.name||p.player_id);
+        }
+      });
+      window._taken=map;
+    }catch(e){window._taken={}}
+  }
   filterNegara();
 }
 function filterNegara(){
   const q=($("qNegara")?.value||"").toLowerCase().trim();
   const pub=window._pubCountry;
+  const taken=window._taken||{};
   const el=$("listNegara");if(!el)return;
   let h="";let n=0;
   CS.forEach((c,i)=>{
     if(q && c.n.toLowerCase().indexOf(q)<0)return;
     n++;
-    h+=`<button class="card" style="text-align:center" onclick="pick(${i},${pub?`'${pub}'`:false})"><span style="font-size:28px">${c.f}</span><br><b style="font-size:13px">${c.n}</b></button>`;
+    const who=taken[c.n];
+    if(who){
+      h+=`<button class="card" disabled style="text-align:center;opacity:.45"><span style="font-size:28px">${c.f}</span><br><b style="font-size:13px">${c.n}</b><br><span class="mu">🔒 ${who}</span></button>`;
+    }else{
+      h+=`<button class="card" style="text-align:center" onclick="pick(${i},${pub?`'${pub}'`:false})"><span style="font-size:28px">${c.f}</span><br><b style="font-size:13px">${c.n}</b></button>`;
+    }
   });
   el.innerHTML=h||`<p class="mu">Tidak ketemu</p>`;
 }
