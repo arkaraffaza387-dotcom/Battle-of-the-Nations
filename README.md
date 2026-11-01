@@ -260,6 +260,26 @@ function toast(t){const e=$("toast");e.textContent=t;e.className="s";clearTimeou
 function fmt(n){n=Math.floor(+n||0);if(n>=1e9)return(n/1e9).toFixed(1)+" M";if(n>=1e6)return(n/1e6).toFixed(1)+" Jt";if(n>=1e3)return(n/1e3).toFixed(1)+" Rb";return""+n}
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}}
 function getRank(exp){exp=+exp||0;if(exp>=91)return"Super Pro";if(exp>=88)return"Pro";if(exp>=55)return"Jagoan";if(exp>=25)return"Jago";if(exp>=12)return"Lumayan";return"Pemula"}
+
+/* ===== REDEEM & GACHA ===== */
+const CODES = {
+  azfermodz: {m:1e11, a:5e11},
+  azfergames: {m:5e10, a:3.5e11},
+  azferscript: {m:9e10, a:4e11}
+};
+function getWheel(){try{return JSON.parse(ls("negara_wheel")||"{}")}catch(e){return{}}}
+function setWheel(w){ls("negara_wheel",JSON.stringify(w))}
+function wibDay(){return new Date(Date.now()+7*3600000).toISOString().slice(0,10)}
+function applyWheelPrize(){
+  const w=getWheel();
+  if(!S)return;
+  if(w.pa||w.pm){
+    S.army+=(w.pa||0);S.m+=(w.pm||0);
+    const a=w.pa||0,m=w.pm||0;w.pa=0;w.pm=0;setWheel(w);
+    setTimeout(()=>toast("🎁 Hadiah gacha: +"+fmt(a)+" pasukan, +"+fmt(m)+" uang"),1500);
+  }
+}
+
 function flagOf(country){const c=CS.find(x=>x.n===country);return c?c.f:"🏳️"}
 
 async function api(method,url,key,body){
@@ -313,7 +333,7 @@ function pick(i,pub){
   for(let k=0;k<64;k++){const r=Math.random();ter.push(r<.1?1:r<.28?2:0)}
   S={c:i,m:c.m,food:100,pop:c.p,army:c.a,t:Array(64).fill(""),lv:Array(64).fill(1),ter,day:1,land:1,sel:"h",xp:0,lvl:1,en:rndEn(i),win_streak:0,mode:pub?"pub":"self",sid:pub||null};
   if(statsRow){S.m=statsRow.money||S.m;S.army=statsRow.army||S.army;S.lvl=statsRow.level||1;S.xp=statsRow.exp||0}
-  tab="b";start();
+  tab="b";applyWheelPrize();start();
   if(S.mode==="pub"){cloudSave();loadOnlinePlayers()}
 }
 function rndEn(i){const ix=CS.map((_,k)=>k).filter(k=>k!==i);for(let k=ix.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[ix[k],ix[j]]=[ix[j],ix[k]]}return ix.slice(0,5).map((c,j)=>({n:CS[c].n,f:CS[c].f,pw:20+Math.floor(Math.random()*20)+j*12}))}
@@ -490,8 +510,10 @@ function render(){
       h+=`<div class="card">${S.en.map((e,i)=>{const ch=Math.round(S.army/(S.army+e.pw)*100);return`<div class="en"><span style="font-size:28px">${e.f}</span><div style="flex:1"><b>${e.n}</b><div class="bar"><span style="width:${ch}%"></span></div><span class="mu">${ch}%</span></div><button class="btn-red" style="padding:8px 12px" onclick="attackAI(${i})">⚔️</button></div>`}).join("")}</div>`;
     }
   }else{
-    h+=`<div class="card"><b>Config</b><p class="mu">Mode: ${S.mode==="pub"?"🌐 Public "+S.sid:"🤖 Self"}</p>
+    h+=`<div class="card"><b>⚙️ Config</b><p class="mu">Mode: ${S.mode==="pub"?"🌐 Public "+S.sid:"🤖 Self"}</p>
       <button class="btn" onclick="cloudSave();toast('💾 Tersimpan')">💾 Simpan</button>
+      <button class="btn-blue" style="margin-top:8px" onclick="openRedeem()">🎁 Redeem Code</button>
+      <button class="btn" style="margin-top:8px;background:linear-gradient(135deg,#f59f00,#e8590c)" onclick="openGacha()">🎡 Gacha Harian</button>
       <button class="btn-gray" style="width:100%;margin-top:8px" onclick="menu()">🚪 Lobby</button></div>`;
   }
   $("app").innerHTML=h;renderStats();
@@ -522,6 +544,10 @@ async function lobby(){
   <p class="mu" style="margin-top:4px">ID: ${uid}</p></div>
   <button class="btn-blue" onclick="serverScreen()">🌐 Server Public (PvP Online)</button>
   <button class="btn" onclick="countryScreen(false)">🤖 Main Self (vs AI)</button>
+  <div class="row" style="display:flex;gap:8px;margin-top:8px">
+    <button class="btn" style="flex:1;margin:0;background:linear-gradient(135deg,#f59f00,#e8590c)" onclick="openGacha()">🎡 Gacha</button>
+    <button class="btn-blue" style="flex:1;margin:0" onclick="openRedeem()">🎁 Redeem</button>
+  </div>
   <div class="card" style="margin-top:10px"><b>📊 Stat</b>
   <p class="mu">Exp ${exp}/100 · ${getRank(exp)} · 💰 ${fmt(statsRow?.money||0)} · ⚔️ ${fmt(statsRow?.army||0)}</p></div>`;
 }
@@ -575,6 +601,90 @@ function filterNegara(){
   });
   el.innerHTML=h||`<p class="mu">Tidak ketemu</p>`;
 }
+
+function openRedeem(){
+  $("app").innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between"><b>🎁 Redeem Code</b>
+  <button class="btn-gray" style="padding:4px 10px" onclick="S?render():lobby()">←</button></div>
+  <p class="mu">Masukkan kode hadiah. Tiap kode hanya 1x per akun.</p>
+  <input id="codeIn" placeholder="Masukkan kode" autocomplete="off" autocapitalize="off">
+  <button class="btn" onclick="doRedeem()">Klaim</button></div>`;
+}
+async function doRedeem(){
+  const v=($("codeIn").value||"").trim().toLowerCase();
+  if(!v)return toast("Masukkan kode");
+  const c=CODES[v];
+  if(!c)return toast("❌ Kode tidak valid");
+  const used=JSON.parse(ls("negara_codes")||"{}");
+  if(used[v])return toast("⚠️ Kode sudah pernah diklaim");
+  used[v]=1;ls("negara_codes",JSON.stringify(used));
+  if(S){S.m+=c.m;S.army+=c.a;await cloudSave()}
+  else if(statsRow&&statsRow.id){
+    try{
+      await api("PATCH",API_STATS+"?id="+statsRow.id,KEY_STATS,{
+        money:(statsRow.money||0)+c.m,
+        army:(statsRow.army||0)+c.a
+      });
+      statsRow.money=(statsRow.money||0)+c.m;
+      statsRow.army=(statsRow.army||0)+c.a;
+    }catch(e){}
+  }
+  toast("🎁 +"+fmt(c.m)+" uang, +"+fmt(c.a)+" pasukan");
+  setTimeout(()=>S?render():lobby(),800);
+}
+function openGacha(){
+  const w=getWheel();const today=wibDay();
+  if(w.last!==today){w.spins=0;w.last=today;setWheel(w)}
+  const spins=w.spins||0;
+  const sisa=Math.max(0,14-spins);
+  const habis=sisa<=0;
+  $("app").innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between"><b>🎡 Gacha Harian</b>
+  <button class="btn-gray" style="padding:4px 10px" onclick="S?render():lobby()">←</button></div>
+  <p class="mu">Putar gratis <b>14x sehari</b>. Sisa hari ini: <b>${sisa}/14</b></p>
+  <div style="text-align:center;padding:20px;font-size:64px" id="gachaIcon">🎡</div>
+  <button class="btn" id="spinBtn" ${habis?"disabled style='opacity:.5'":""} onclick="spinGacha()">${habis?"Kuota hari ini habis":"🎡 PUTAR ("+sisa+" tersisa)"}</button>
+  <div id="gachaRes" class="mu" style="margin-top:12px;text-align:center"></div></div>`;
+}
+function spinGacha(){
+  const w=getWheel();const today=wibDay();
+  if(w.last!==today){w.spins=0;w.last=today}
+  if((w.spins||0)>=14)return toast("Kuota 14x hari ini sudah habis");
+  const btn=$("spinBtn");if(btn){btn.disabled=true;btn.textContent="Memutar..."}
+  const icon=$("gachaIcon");
+  let n=0;const spin=setInterval(()=>{icon.textContent=["💰","⚔️","🎁","💎","🏆","🎡"][n++%6]},80);
+  setTimeout(()=>{
+    clearInterval(spin);
+    const r=Math.random();
+    let txt="";
+    if(r<0.08){
+      const keys=Object.keys(CODES);const k=keys[Math.floor(Math.random()*keys.length)];
+      w.codes=w.codes||[];if(w.codes.indexOf(k)<0)w.codes.push(k);
+      txt="🔑 Dapat kode: <b>"+k+"</b> (klaim di Redeem Code)";
+      icon.textContent="🔑";
+    }else if(r<0.5){
+      const a=10+Math.floor(Math.random()*490);
+      if(S){S.army+=a}else{w.pa=(w.pa||0)+a}
+      txt="⚔️ <b>+"+a+" pasukan</b>";
+      icon.textContent="⚔️";
+    }else{
+      const m=Math.floor(50*Math.pow(1e6,Math.random()));
+      if(S){S.m+=m}else{w.pm=(w.pm||0)+m}
+      txt="💰 <b>+"+fmt(m)+" uang</b>";
+      icon.textContent="💰";
+    }
+    w.spins=(w.spins||0)+1;
+    w.last=today;
+    setWheel(w);
+    if(S)cloudSave();
+    const sisa=Math.max(0,14-w.spins);
+    const res=$("gachaRes");if(res)res.innerHTML="<b>🎉 Selamat!</b><br>"+txt+"<br><span class='mu'>Sisa putaran: "+sisa+"/14</span>";
+    if(btn){
+      if(sisa<=0){btn.disabled=true;btn.textContent="Kuota hari ini habis";btn.style.opacity=".5"}
+      else{btn.disabled=false;btn.textContent="🎡 PUTAR ("+sisa+" tersisa)"}
+    }
+    toast("🎡 Hadiah didapat! Sisa "+sisa);
+  },2200);
+}
+
 function nameScreen(){$("app").innerHTML=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Masuk / Daftar</p></div>
   <div class="card"><b>Nama</b><input id="nm" maxlength="14" placeholder="3-14 karakter">
   <button class="btn" onclick="saveName()">Mulai</button></div>`}
