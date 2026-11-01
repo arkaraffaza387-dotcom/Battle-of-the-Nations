@@ -1,41 +1,53 @@
-
+<!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Battle of the Nations</title>
 <style>
-:root{--bg:#e6efe0;--card:rgba(255,255,255,.9);--tx:#1d2a1a;--mu:#5b6b55;--ac:#2f9e44;--ac2:#0288d1;--bd:#c5d4bd;--bad:#d32f2f;color-scheme:light}
-@media(prefers-color-scheme:dark){:root{--bg:#0c130a;--card:rgba(28,40,24,.92);--tx:#e8f0e3;--mu:#9aab93;--ac:#51cf66;--ac2:#4dabf7;--bd:#33432f;--bad:#ef5350;color-scheme:dark}}
+:root{
+--bg:#0a0a0c;
+--card:rgba(22,18,12,.94);
+--tx:#f5e6c8;
+--mu:#a89878;
+--ac:#d4a017;
+--ac2:#f0c14b;
+--bd:#3d3420;
+--bad:#e74c3c;
+--gold:#ffd700;
+--gold2:#f0c14b;
+--gold3:#b8860b;
+color-scheme:dark
+}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:12px 12px 70px;min-height:100vh}
 button,input{font:inherit}
 button{cursor:pointer;border:0;border-radius:12px;padding:11px 14px;font-weight:600}
 button:active{transform:scale(.96)}
-.hero{text-align:center;padding:22px 12px;border-radius:18px;color:#fff;margin-bottom:12px;background:linear-gradient(135deg,#1b5e20,#0288d1,#6a1b9a);background-size:300% 300%;animation:bg 8s ease infinite}
+.hero{text-align:center;padding:22px 12px;border-radius:18px;color:#fff;margin-bottom:12px;background:linear-gradient(135deg,#1a1200,#3d2e0a,#d4a017,#3d2e0a);background-size:300% 300%;animation:bg 8s ease infinite}
 .hero h1{margin:0;font-size:22px}.hero p{margin:6px 0 0;opacity:.9;font-size:13px}
 @keyframes bg{50%{background-position:100% 50%}}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;margin-bottom:10px}
 .mu{color:var(--mu);font-size:13px}
-.btn{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;width:100%;margin-top:10px}
+.btn{background:linear-gradient(135deg,#b8860b,#ffd700,#f0c14b);color:#fff;width:100%;margin-top:10px}
 .btn-red{background:linear-gradient(135deg,#e03131,#c2255c);color:#fff}
 .btn-gray{background:#495057;color:#fff}
-.btn-blue{background:linear-gradient(135deg,#1971c2,#7048e8);color:#fff;width:100%;margin-top:8px}
+.btn-blue{background:linear-gradient(135deg,#5c4a00,#d4a017);color:#fff;width:100%;margin-top:8px}
 input{width:100%;padding:12px;border-radius:12px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);margin-top:6px}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;font-size:13px;margin-top:10px}
 .stats div{background:rgba(0,0,0,.06);border-radius:10px;padding:6px 2px}.stats b{display:block;font-size:15px}
 .tabs{display:flex;gap:5px;margin-bottom:10px}
 .tabs button{flex:1;background:var(--card);color:var(--tx);border:1px solid var(--bd);padding:10px 4px;font-size:13px}
-.tabs button.on{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;border-color:transparent}
+.tabs button.on{background:linear-gradient(135deg,#b8860b,#ffd700,#f0c14b);color:#fff;border-color:transparent}
 .grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;background:var(--bd);padding:3px;border-radius:12px}
 .grid div{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:clamp(14px,5vw,22px);background:var(--card)}
 .bgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
 .bgrid button{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:12px;padding:8px 2px;font-size:11px;min-height:60px}
-.bgrid button.on{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;border:0}
+.bgrid button.on{background:linear-gradient(135deg,#b8860b,#ffd700,#f0c14b);color:#fff;border:0}
 .en{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--bd)}.en:first-child{border-top:0}
 .bar{height:7px;background:var(--bd);border-radius:4px;margin:4px 0;overflow:hidden}
 .bar span{display:block;height:100%;background:linear-gradient(90deg,#fa5252,#fcc419,#51cf66)}
-.rank{display:inline-block;background:#ffd43b;color:#5c3d00;border-radius:8px;padding:2px 8px;font-size:12px;font-weight:700}
+.rank{display:inline-block;background:linear-gradient(135deg,#ffd700,#b8860b);color:#1a1200;border-radius:8px;padding:3px 10px;font-size:12px;font-weight:800;box-shadow:0 0 12px rgba(255,215,0,.45)}
 .srv{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--bd)}.srv:first-child{border-top:0}
 .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700}
 .ok{background:#2f9e44;color:#fff}.no{background:#e03131;color:#fff}.warn{background:#f59f00;color:#212529}.blue{background:#1971c2;color:#fff}
@@ -259,7 +271,35 @@ const $=id=>document.getElementById(id);
 function toast(t){const e=$("toast");e.textContent=t;e.className="s";clearTimeout(window._tt);window._tt=setTimeout(()=>e.className="",2800)}
 function fmt(n){n=Math.floor(+n||0);if(n>=1e9)return(n/1e9).toFixed(1)+" M";if(n>=1e6)return(n/1e6).toFixed(1)+" Jt";if(n>=1e3)return(n/1e3).toFixed(1)+" Rb";return""+n}
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}}
-function getRank(exp){exp=+exp||0;if(exp>=91)return"Super Pro";if(exp>=88)return"Pro";if(exp>=55)return"Jagoan";if(exp>=25)return"Jago";if(exp>=12)return"Lumayan";return"Pemula"}
+function getRank(score){
+  score=+score||0;
+  if(score>=100000)return"The Anomali";
+  if(score>=80000)return"Celestial";
+  if(score>=60000)return"Mythic Emperor";
+  if(score>=45000)return"Grandmaster";
+  if(score>=35000)return"Legend";
+  if(score>=25000)return"Champion";
+  if(score>=18000)return"Elite";
+  if(score>=12000)return"Master";
+  if(score>=8000)return"Expert";
+  if(score>=5000)return"Veteran";
+  if(score>=3000)return"Warrior";
+  if(score>=1500)return"Fighter";
+  if(score>=800)return"Skilled";
+  if(score>=400)return"Trained";
+  if(score>=200)return"Adept";
+  if(score>=100)return"Super Pro";
+  if(score>=88)return"Pro";
+  if(score>=55)return"Jagoan";
+  if(score>=25)return"Jago";
+  if(score>=12)return"Lumayan";
+  return"Pemula";
+}
+function rankScore(){
+  // skor rank: level*100 + exp + win contribution
+  if(!S)return (statsRow?(statsRow.level||1)*100+(statsRow.exp||0):0);
+  return (S.lvl||1)*100+(S.xp||0)+Math.floor((S.land||1)*2)+(S.win_streak||0)*5;
+}
 
 /* ===== REDEEM & GACHA ===== */
 const CODES = {
@@ -358,9 +398,9 @@ async function cloudSave(){
     const body={
       level:S.lvl,exp:S.xp,money:Math.floor(S.m),army:Math.floor(S.army),
       game_stats:{
-        name:ACC?.name,rank:getRank(S.xp),win_streak:S.win_streak||0,
+        name:ACC?.name,rank:getRank(rankScore()),win_streak:S.win_streak||0,
         day:S.day,country:CS[S.c].n,server:S.sid||null,land:S.land,
-        last_active:new Date().toISOString()
+        last_active:new Date().toISOString(),rc:S.rc||{}
       }
     };
     if(statsRow&&statsRow.id){
@@ -392,7 +432,7 @@ function attackAI(i){
     S.army=Math.max(0,S.army-Math.floor(e.pw*0.3));
     S.m+=gain;S.land++;e.pw=Math.max(15,e.pw*0.7);
     S.win_streak=(S.win_streak||0)+1;
-    if(S.win_streak>=3){S.win_streak=0;S.xp=Math.min(100,(S.xp||0)+1);S.lvl=Math.max(S.lvl,Math.floor(S.xp/10)+1);toast("🎉 Menang AI! +"+fmt(gain)+" · ⭐ +1 Exp")}
+    if(S.win_streak>=3){S.win_streak=0;S.xp=(S.xp||0)+1;S.lvl=Math.max(S.lvl,Math.floor(S.xp/10)+1);toast("🎉 Menang AI! +"+fmt(gain)+" · ⭐ +1 Exp")}
     else toast("🎉 Menang AI! +"+fmt(gain));
     cloudSave();
   }else{S.army=Math.floor(S.army*0.5);S.win_streak=0;toast("💥 Kalah dari AI")}
@@ -423,7 +463,7 @@ async function attackPlayer(pid){
     S.win_streak=(S.win_streak||0)+1;
     if(S.win_streak>=3){
       S.win_streak=0;
-      S.xp=Math.min(100,(S.xp||0)+1);
+      S.xp=(S.xp||0)+1;
       S.lvl=Math.max(S.lvl,Math.floor(S.xp/10)+1);
       toast("🎉 Menang lawan "+tName+"! +"+fmt(loot)+" · ⭐ +1 Exp");
     }else toast("🎉 Menang lawan "+tName+"! +"+fmt(loot)+" uang");
@@ -452,13 +492,13 @@ async function attackPlayer(pid){
 function renderStats(){
   const el=$("st");if(!el||!S)return;
   el.innerHTML=[["💰",fmt(S.m)],["🌾",fmt(S.food)],["👥",Math.floor(S.pop)+"/"+cap()],["⚔️",fmt(S.army)],["🗺️",S.land],["📅","Hari "+S.day]].map(x=>`<div>${x[0]}<b>${x[1]}</b></div>`).join("");
-  const rk=$("rank");if(rk)rk.innerHTML=`<span class="rank">Lv ${S.lvl} · ${getRank(S.xp)} (${S.xp})</span>`;
+  const rk=$("rank");if(rk)rk.innerHTML=`<span class="rank">Lv ${S.lvl} · ${getRank(rankScore())}</span>`;
 }
 
 function render(){
   if(!S){lobby();return}
   const c=CS[S.c];
-  let h=`<div class="card" style="background:linear-gradient(135deg,#1b5e20,#0277bd);color:#fff;border:0">
+  let h=`<div class="card" style="background:linear-gradient(135deg,#2a1f00,#d4a017 40%,#8a6d0b);color:#fff;border:0">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <b style="font-size:16px">${c.f} ${c.n}${S.sid?" · "+S.sid:""}</b>
       <button onclick="menu()" style="background:rgba(255,255,255,.2);color:#fff;padding:4px 10px;font-size:13px">🌍</button>
@@ -540,16 +580,13 @@ async function lobby(){
   await ensureStats(ACC?.name);
   const name=ACC?.name||"Pemain";const lvl=statsRow?.level||1;const exp=statsRow?.exp||0;
   $("app").innerHTML=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Lobby</p></div>
-  <div class="card"><div style="display:flex;justify-content:space-between"><span>👤 <b>${name}</b></span><span class="rank">Lv ${lvl} · ${getRank(exp)}</span></div>
+  <div class="card"><div style="display:flex;justify-content:space-between"><span>👤 <b>${name}</b></span><span class="rank">Lv ${lvl} · ${getRank((lvl||1)*100+exp)}</span></div>
   <p class="mu" style="margin-top:4px">ID: ${uid}</p></div>
   <button class="btn-blue" onclick="serverScreen()">🌐 Server Public (PvP Online)</button>
   <button class="btn" onclick="countryScreen(false)">🤖 Main Self (vs AI)</button>
-  <div class="row" style="display:flex;gap:8px;margin-top:8px">
-    <button class="btn" style="flex:1;margin:0;background:linear-gradient(135deg,#f59f00,#e8590c)" onclick="openGacha()">🎡 Gacha</button>
-    <button class="btn-blue" style="flex:1;margin:0" onclick="openRedeem()">🎁 Redeem</button>
-  </div>
+  <button class="btn" style="margin-top:8px;background:linear-gradient(135deg,#f59f00,#e8590c)" onclick="openGacha()">🎡 Gacha Harian</button>
   <div class="card" style="margin-top:10px"><b>📊 Stat</b>
-  <p class="mu">Exp ${exp}/100 · ${getRank(exp)} · 💰 ${fmt(statsRow?.money||0)} · ⚔️ ${fmt(statsRow?.army||0)}</p></div>`;
+  <p class="mu">Rank ${getRank((lvl||1)*100+exp)} · Score ${(lvl||1)*100+exp} · 💰 ${fmt(statsRow?.money||0)} · ⚔️ ${fmt(statsRow?.army||0)}</p></div>`;
 }
 
 async function serverScreen(){
@@ -603,33 +640,27 @@ function filterNegara(){
 }
 
 function openRedeem(){
+  if(!S){toast("Redeem hanya bisa setelah memilih negara");return}
   $("app").innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between"><b>🎁 Redeem Code</b>
-  <button class="btn-gray" style="padding:4px 10px" onclick="S?render():lobby()">←</button></div>
-  <p class="mu">Masukkan kode hadiah. Tiap kode hanya 1x per akun.</p>
+  <button class="btn-gray" style="padding:4px 10px" onclick="render()">←</button></div>
+  <p class="mu">Kode hanya bisa diklaim <b>1x per negara</b>. Ganti negara = mulai baru, kode bisa diklaim lagi.</p>
   <input id="codeIn" placeholder="Masukkan kode" autocomplete="off" autocapitalize="off">
   <button class="btn" onclick="doRedeem()">Klaim</button></div>`;
 }
 async function doRedeem(){
   const v=($("codeIn").value||"").trim().toLowerCase();
   if(!v)return toast("Masukkan kode");
+  if(!S)return toast("Redeem hanya bisa saat sudah memilih negara");
   const c=CODES[v];
   if(!c)return toast("❌ Kode tidak valid");
-  const used=JSON.parse(ls("negara_codes")||"{}");
-  if(used[v])return toast("⚠️ Kode sudah pernah diklaim");
-  used[v]=1;ls("negara_codes",JSON.stringify(used));
-  if(S){S.m+=c.m;S.army+=c.a;await cloudSave()}
-  else if(statsRow&&statsRow.id){
-    try{
-      await api("PATCH",API_STATS+"?id="+statsRow.id,KEY_STATS,{
-        money:(statsRow.money||0)+c.m,
-        army:(statsRow.army||0)+c.a
-      });
-      statsRow.money=(statsRow.money||0)+c.m;
-      statsRow.army=(statsRow.army||0)+c.a;
-    }catch(e){}
-  }
+  // 1x per negara: simpan di S.rc
+  S.rc=S.rc||{};
+  if(S.rc[v])return toast("⚠️ Kode sudah diklaim di negara ini. Ganti negara untuk klaim lagi.");
+  S.rc[v]=1;
+  S.m+=c.m;S.army+=c.a;
+  await cloudSave();
   toast("🎁 +"+fmt(c.m)+" uang, +"+fmt(c.a)+" pasukan");
-  setTimeout(()=>S?render():lobby(),800);
+  setTimeout(render,800);
 }
 function openGacha(){
   const w=getWheel();const today=wibDay();
