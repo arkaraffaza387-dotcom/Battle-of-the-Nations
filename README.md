@@ -71,8 +71,8 @@ const SRV_PREFIX="SERVER|";
 
 /* ===== PENGATURAN BAN / TINJAU / ANTI-CHEAT ===== */
 const DAY_MS=24*3600*1000;
-const ADMIN_PHONE="0858-8238-2855";       // tampil di layar ban
-const ADMIN_WA="6285882382855";           // format internasional untuk link WhatsApp
+const ADMIN_PHONE="0858-8238-2854";       // tampil di layar ban
+const ADMIN_WA="6285882382854";           // format internasional untuk link WhatsApp
 const REVIEW_MAX_DAYS=14;                 // Tinjau Otomatis hanya untuk ban < 14 hari
 const REVIEW_MS=3*60*1000;                // tunggu 3 menit setelah Tinjau Otomatis
 const CHEAT_ALLOW_REVIEW=true;            // false = ban dari Anti-Cheat TIDAK bisa Tinjau Otomatis
