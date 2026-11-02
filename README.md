@@ -278,8 +278,71 @@ const CS=[
 {n:"Yordania",f:"🇯🇴",m:765,a:40,p:50},
 {n:"Yunani",f:"🇬🇷",m:682,a:21,p:36},
 {n:"Zambia",f:"🇿🇲",m:638,a:61,p:42},
-{n:"Zimbabwe",f:"🇿🇼",m:822,a:25,p:34}
+{n:"Zimbabwe",f:"🇿🇼",m:822,a:25,p:34},
+{n:"Hong Kong",f:"🇭🇰",m:510,a:60,p:48},
+{n:"Makau",f:"🇲🇴",m:929,a:20,p:23},
+{n:"Greenland",f:"🇬🇱",m:771,a:27,p:30},
+{n:"Puerto Riko",f:"🇵🇷",m:788,a:45,p:48},
+{n:"Kepulauan Faroe",f:"🇫🇴",m:536,a:69,p:32},
+{n:"Gibraltar",f:"🇬🇮",m:577,a:59,p:30},
+{n:"Bermuda",f:"🇧🇲",m:668,a:55,p:38},
+{n:"Kepulauan Cayman",f:"🇰🇾",m:815,a:60,p:49},
+{n:"Kepulauan Cook",f:"🇨🇰",m:864,a:61,p:54},
+{n:"Niue",f:"🇳🇺",m:787,a:23,p:41},
+{n:"Guam",f:"🇬🇺",m:742,a:45,p:46},
+{n:"Samoa Amerika",f:"🇦🇸",m:911,a:45,p:52},
+{n:"Kaledonia Baru",f:"🇳🇨",m:486,a:32,p:39},
+{n:"Polinesia Prancis",f:"🇵🇫",m:819,a:45,p:58},
+{n:"Aruba",f:"🇦🇼",m:749,a:28,p:59},
+{n:"Curaçao",f:"🇨🇼",m:782,a:27,p:39},
+{n:"Sint Maarten",f:"🇸🇽",m:933,a:20,p:37},
+{n:"Kepulauan Virgin Britania",f:"🇻🇬",m:826,a:24,p:45},
+{n:"Kepulauan Virgin AS",f:"🇻🇮",m:639,a:67,p:52},
+{n:"Anguilla",f:"🇦🇮",m:949,a:34,p:45},
+{n:"Montserrat",f:"🇲🇸",m:698,a:20,p:23},
+{n:"Turks dan Caicos",f:"🇹🇨",m:775,a:36,p:31},
+{n:"Kepulauan Falkland",f:"🇫🇰",m:638,a:58,p:55},
+{n:"Guyana Prancis",f:"🇬🇫",m:692,a:72,p:23},
+{n:"Guadeloupe",f:"🇬🇵",m:847,a:42,p:38},
+{n:"Martinik",f:"🇲🇶",m:508,a:55,p:57},
+{n:"Reunion",f:"🇷🇪",m:426,a:50,p:22},
+{n:"Mayotte",f:"🇾🇹",m:649,a:32,p:54},
+{n:"Saint-Pierre dan Miquelon",f:"🇵🇲",m:917,a:67,p:40},
+{n:"Saint-Barthélemy",f:"🇧🇱",m:407,a:34,p:36},
+{n:"Saint-Martin",f:"🇲🇫",m:540,a:60,p:41},
+{n:"Pulau Man",f:"🇮🇲",m:809,a:62,p:37},
+{n:"Jersey",f:"🇯🇪",m:616,a:35,p:40},
+{n:"Guernsey",f:"🇬🇬",m:788,a:34,p:35},
+{n:"Kepulauan Åland",f:"🇦🇽",m:932,a:26,p:28},
+{n:"Svalbard",f:"🇸🇯",m:416,a:39,p:30},
+{n:"Sahara Barat",f:"🇪🇭",m:938,a:57,p:42},
+{n:"Kepulauan Mariana Utara",f:"🇲🇵",m:688,a:71,p:36},
+{n:"Kepulauan Pitcairn",f:"🇵🇳",m:514,a:46,p:37},
+{n:"Saint Helena",f:"🇸🇭",m:656,a:35,p:24},
+{n:"Wallis dan Futuna",f:"🇼🇫",m:774,a:28,p:28},
+{n:"Tokelau",f:"🇹🇰",m:581,a:43,p:26},
+{n:"Pulau Natal",f:"🇨🇽",m:490,a:41,p:58},
+{n:"Kepulauan Cocos",f:"🇨🇨",m:932,a:23,p:61},
+{n:"Pulau Norfolk",f:"🇳🇫",m:648,a:29,p:24},
+{n:"Bonaire",f:"🇧🇶",m:622,a:36,p:31},
+{n:"Ascension",f:"🇦🇨",m:652,a:56,p:40},
+{n:"Tristan da Cunha",f:"🇹🇦",m:455,a:45,p:52},
+{n:"Ceuta dan Melilla",f:"🇪🇦",m:405,a:70,p:30},
+{n:"Kepulauan Canary",f:"🇮🇨",m:429,a:29,p:55},
+{n:"Antartika",f:"🇦🇶",m:431,a:58,p:47},
+{n:"Pulau Bouvet",f:"🇧🇻",m:567,a:43,p:22},
+{n:"Kepulauan Heard dan McDonald",f:"🇭🇲",m:931,a:54,p:35},
+{n:"Georgia Selatan dan Sandwich Selatan",f:"🇬🇸",m:674,a:60,p:45},
+{n:"Wilayah Samudra Hindia Britania",f:"🇮🇴",m:442,a:38,p:46},
+{n:"Wilayah Selatan Prancis",f:"🇹🇫",m:401,a:35,p:60},
+{n:"Kepulauan Terluar AS",f:"🇺🇲",m:892,a:34,p:37},
+{n:"Somaliland",f:"🏳️",m:768,a:54,p:51},
+{n:"Siprus Utara",f:"🏳️",m:653,a:33,p:42},
+{n:"Abkhazia",f:"🏳️",m:485,a:40,p:48},
+{n:"Ossetia Selatan",f:"🏳️",m:939,a:55,p:31},
+{n:"Transnistria",f:"🏳️",m:752,a:23,p:37}
 ];
+CS.sort((a,b)=>a.n.localeCompare(b.n,"id"));
 const B={
 h:{e:"🏠",n:"Rumah",c:100,cat:"infra"},
 ap:{e:"🏢",n:"Apartemen",c:280,cat:"infra"},
@@ -942,7 +1005,7 @@ async function joinServer(code,minLv){
       const gs=p.game_stats||{};
       if(gs.server===code && p.player_id!==uid) online.add(p.player_id);
     });
-    if(online.size>=197)return toast("Server penuh (197/197 negara)");
+    if(online.size>=CS.length)return toast("Server penuh ("+CS.length+"/"+CS.length+" negara)");
   }catch(e){}
   currentServer=s;countryScreen(code);
 }
@@ -951,7 +1014,7 @@ async function countryScreen(pub){
   window._taken = {};
   $("app").innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between"><b>${pub?"Pilih Negara · "+pub:"Pilih Negara · Self"}</b>
   <button class="btn-gray" style="padding:4px 10px" onclick="${pub?"serverScreen()":"lobby()"}">←</button></div>
-  <p class="mu">${pub?"Negara yang sudah dipakai pemain lain terkunci 🔒. Maks 197 pemain/server.":"Mode latihan lawan AI."} · ${CS.length} negara</p>
+  <p class="mu">${pub?"Negara yang sudah dipakai pemain lain terkunci 🔒. Maks ${CS.length} pemain/server.":"Mode latihan lawan AI."} · ${CS.length} negara</p>
   <input id="qNegara" placeholder="🔎 Cari negara..." oninput="filterNegara()" style="margin-top:8px"></div>
   <div id="listNegara" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><p class="mu">Memuat...</p></div>`;
   if(pub){
