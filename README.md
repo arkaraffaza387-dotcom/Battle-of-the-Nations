@@ -24,6 +24,7 @@ body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,sans-se
 button,input{font:inherit}
 button{cursor:pointer;border:0;border-radius:12px;padding:11px 14px;font-weight:600}
 button:active{transform:scale(.96)}
+button:disabled{opacity:.55;cursor:default}
 .hero{text-align:center;padding:22px 12px;border-radius:18px;color:#fff;margin-bottom:12px;background:linear-gradient(135deg,#1a1200,#3d2e0a,#d4a017,#3d2e0a);background-size:300% 300%;animation:bg 8s ease infinite}
 .hero h1{margin:0;font-size:22px}.hero p{margin:6px 0 0;opacity:.9;font-size:13px}
 @keyframes bg{50%{background-position:100% 50%}}
@@ -51,6 +52,10 @@ input{width:100%;padding:12px;border-radius:12px;border:1px solid var(--bd);back
 .srv{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--bd)}.srv:first-child{border-top:0}
 .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700}
 .ok{background:#2f9e44;color:#fff}.no{background:#e03131;color:#fff}.warn{background:#f59f00;color:#212529}.blue{background:#1971c2;color:#fff}
+.banst{display:inline-block;padding:6px 14px;border-radius:20px;font-weight:800;font-size:14px}
+.banst.perm{background:#e03131;color:#fff}
+.banst.temp{background:#f59f00;color:#212529}
+.wa{display:block;text-align:center;text-decoration:none;background:linear-gradient(135deg,#2f9e44,#37b24d);color:#fff;border-radius:12px;padding:11px 14px;font-weight:700;margin-top:10px}
 #toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,30px);background:#212529;color:#fff;padding:11px 18px;border-radius:22px;font-size:14px;opacity:0;transition:.3s;max-width:90%;text-align:center;z-index:20}
 #toast.s{opacity:1;transform:translate(-50%,0)}
 </style>
@@ -63,6 +68,18 @@ const KEY_STATS="dk_7a757b64d9584e6bb1e005e536854a3b";
 const API_META="https://data-base-fazxy.lovable.app/api/public/v1/player_meta";
 const KEY_META="dk_9b7f76500c7e4b5db41c34636ebce111";
 const SRV_PREFIX="SERVER|";
+
+/* ===== PENGATURAN BAN / TINJAU / ANTI-CHEAT ===== */
+const DAY_MS=24*3600*1000;
+const ADMIN_PHONE="0858-8238-2855";       // tampil di layar ban
+const ADMIN_WA="6285882382855";           // format internasional untuk link WhatsApp
+const REVIEW_MAX_DAYS=14;                 // Tinjau Otomatis hanya untuk ban < 14 hari
+const REVIEW_MS=3*60*1000;                // tunggu 3 menit setelah Tinjau Otomatis
+const CHEAT_ALLOW_REVIEW=true;            // false = ban dari Anti-Cheat TIDAK bisa Tinjau Otomatis
+const AC_BAN_DAYS=3;                      // ban otomatis Anti-Cheat
+const AC_REASON="Terdeteksi Cheat";
+const AC_MAX_MONEY=1e13;                  // batas wajar uang/pasukan (non-admin)
+const AC_MAX_ARMY=1e13;
 
 const CS=[
 {n:"Afghanistan",f:"🇦🇫",m:508,a:27,p:33},
@@ -300,11 +317,12 @@ const CATS=[
 let buildCat="infra";
 
 
-let S=null,tab="b",timer=null,pollTimer=null,uid=null,ACC=null,metaRow=null,statsRow=null,currentServer=null,onlinePlayers=[];
+let S=null,tab="b",timer=null,pollTimer=null,banTimer=null,uid=null,ACC=null,metaRow=null,metaRows=[],statsRow=null,currentServer=null,onlinePlayers=[];
 
 const $=id=>document.getElementById(id);
 function toast(t){const e=$("toast");e.textContent=t;e.className="s";clearTimeout(window._tt);window._tt=setTimeout(()=>e.className="",2800)}
 function fmt(n){n=Math.floor(+n||0);if(n>=1e9)return(n/1e9).toFixed(1)+" M";if(n>=1e6)return(n/1e6).toFixed(1)+" Jt";if(n>=1e3)return(n/1e3).toFixed(1)+" Rb";return""+n}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}}
 function getRank(score){
   score=+score||0;
@@ -367,15 +385,154 @@ async function api(method,url,key,body){
 }
 function arr(d){if(!d)return[];if(Array.isArray(d))return d;if(Array.isArray(d.records))return d.records;if(Array.isArray(d.data))return d.data;return[]}
 
-async function loadMeta(){try{const list=arr(await api("GET",API_META,KEY_META));const m=list.filter(x=>x.player_id===uid).sort((a,b)=>{
-  // prioritaskan yang is_banned=true, lalu terbaru
-  if(a.is_banned!==b.is_banned)return(b.is_banned?1:0)-(a.is_banned?1:0);
-  return new Date(b.created_at||0)-new Date(a.created_at||0);
-});metaRow=m[0]||null;return metaRow}catch(e){metaRow=null;return null}}
+/* ===== BAN: helper ===== */
+function banKey(ex){return ex.banned_at||ex.ban_until||"x"}
+function isPermBan(m){return !((m&&m.extra)&&m.extra.ban_until)}   // tanpa ban_until = permanen
+function banExpired(m){const ex=(m&&m.extra)||{};return !!m.is_banned&&!!ex.ban_until&&new Date(ex.ban_until)<=new Date()}
+function reviewInfo(m){
+  const ex=(m&&m.extra)||{};
+  if(ex.review_for&&ex.review_for===banKey(ex)&&ex.review_until)return{until:new Date(ex.review_until)};
+  return null;
+}
+function reviewDone(m){const rv=reviewInfo(m);return !!m.is_banned&&!!rv&&rv.until<=new Date()}
+function banDaysOf(ex){
+  if(ex.ban_days)return+ex.ban_days;
+  if(ex.ban_until&&ex.banned_at)return Math.round((new Date(ex.ban_until)-new Date(ex.banned_at))/DAY_MS);
+  if(ex.ban_until)return Math.ceil((new Date(ex.ban_until)-Date.now())/DAY_MS);
+  return null;
+}
+function canReview(m){
+  const ex=(m&&m.extra)||{};
+  if(isPermBan(m)||reviewInfo(m))return false;
+  if(!CHEAT_ALLOW_REVIEW&&ex.banned_by==="Anti-Cheat")return false;
+  const d=banDaysOf(ex);
+  return d!==null&&d<REVIEW_MAX_DAYS;
+}
+function clearedExtra(ex,by){
+  return{...(ex||{}),ban_reason:"",ban_until:null,ban_type:"",ban_days:null,review_for:null,review_until:null,unbanned_at:new Date().toISOString(),unbanned_by:by};
+}
+function fmtLeft(ms){
+  if(ms<=0)return"0 detik";
+  const s=Math.floor(ms/1000);
+  const d=Math.floor(s/86400),h=Math.floor((s%86400)/3600),m=Math.floor((s%3600)/60),c=s%60;
+  if(d>0)return d+" hari "+h+" jam "+m+" menit";
+  if(h>0)return h+" jam "+m+" menit "+c+" dtk";
+  return m+" mnt "+c+" dtk";
+}
+
+async function loadMeta(){
+  try{
+    const list=arr(await api("GET",API_META,KEY_META));
+    const rows=list.filter(x=>x.player_id===uid);
+    // buka otomatis: ban sementara yang sudah habis, atau Tinjau Otomatis yang sudah 3 menit
+    for(const r of rows){
+      if(!r.id)continue;
+      if(banExpired(r)||reviewDone(r)){
+        const by=reviewDone(r)&&!banExpired(r)?"auto-review":"auto";
+        const ne=clearedExtra(r.extra,by);
+        try{await api("PATCH",API_META+"?id="+r.id,KEY_META,{is_banned:false,extra:ne});r.is_banned=false;r.extra=ne}catch(e){}
+      }
+    }
+    // prioritaskan yang is_banned=true, lalu terbaru
+    rows.sort((a,b)=>{
+      if(!!a.is_banned!==!!b.is_banned)return(b.is_banned?1:0)-(a.is_banned?1:0);
+      return new Date(b.created_at||0)-new Date(a.created_at||0);
+    });
+    metaRows=rows;metaRow=rows[0]||null;return metaRow;
+  }catch(e){metaRow=null;metaRows=[];return null}
+}
 async function loadStats(){try{const list=arr(await api("GET",API_STATS,KEY_STATS));const m=list.filter(x=>x.player_id===uid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));statsRow=m[0]||null;return statsRow}catch(e){statsRow=null;return null}}
-async function ensureMeta(){await loadMeta();if(!metaRow){try{metaRow=await api("POST",API_META,KEY_META,{player_id:uid,is_admin:false,is_banned:false,is_whitelisted:false,extra:{}})}catch(e){}}}
+async function ensureMeta(){await loadMeta();if(!metaRow){try{metaRow=await api("POST",API_META,KEY_META,{player_id:uid,is_admin:false,is_banned:false,is_whitelisted:false,extra:{}});if(metaRow)metaRows=[metaRow]}catch(e){}}}
 async function ensureStats(name){await loadStats();if(!statsRow){try{statsRow=await api("POST",API_STATS,KEY_STATS,{player_id:uid,level:1,exp:0,money:500,army:20,game_stats:{name:name||"Pemain",rank:"Pemula",win_streak:0}})}catch(e){}}}
 function isBanned(){return !!(metaRow&&metaRow.is_banned)}
+
+/* ===== BAN OTOMATIS (dipakai Anti-Cheat) ===== */
+async function applyBan(days,reason,by,detail){
+  const now=new Date();
+  const info={
+    ban_reason:reason,banned_at:now.toISOString(),banned_by:by,
+    ban_type:"temporary",ban_days:days,ban_until:new Date(now.getTime()+days*DAY_MS).toISOString(),
+    review_for:null,review_until:null,ban_detail:detail||""
+  };
+  try{
+    await loadMeta();
+    if(metaRows.length){
+      for(const r of metaRows){
+        const ne={...(r.extra||{}),...info};
+        await api("PATCH",API_META+"?id="+r.id,KEY_META,{is_banned:true,extra:ne});
+        r.is_banned=true;r.extra=ne;
+      }
+      metaRow=metaRows[0];
+    }else{
+      metaRow=await api("POST",API_META,KEY_META,{player_id:uid,is_admin:false,is_banned:true,is_whitelisted:false,extra:info});
+      if(metaRow)metaRows=[metaRow];
+    }
+  }catch(e){}
+  // kalau server gagal dihubungi, tetap tampilkan layar ban di sesi ini
+  if(!metaRow||!metaRow.is_banned){metaRow={player_id:uid,is_banned:true,extra:info};metaRows=[metaRow]}
+}
+
+/* ===== ANTI-CHEAT ===== */
+let acBusy=false,acObs=null,acKnown=new WeakSet();
+function acOwn(n){return n.id==="app"||n.id==="toast"||(n.closest&&!!n.closest("#app,#toast"))}
+// kembalikan alasan kalau elemen mencurigakan (overlay/ikon melayang, iframe, script suntikan)
+function acSuspect(n){
+  if(!n||n.nodeType!==1||acKnown.has(n)||acOwn(n))return null;
+  const t=n.tagName;
+  if(t==="STYLE"||t==="LINK"||t==="META"||t==="TITLE"||t==="HEAD"||t==="BODY"||t==="NOSCRIPT")return null;
+  if(t==="SCRIPT")return"script disuntik";
+  if(t==="IFRAME"||t==="OBJECT"||t==="EMBED")return"iframe/embed asing";
+  let cs;try{cs=getComputedStyle(n)}catch(e){return null}
+  if((cs.position==="fixed"||cs.position==="absolute")&&cs.display!=="none"&&cs.visibility!=="hidden"){
+    const z=parseInt(cs.zIndex)||0;
+    const r=n.getBoundingClientRect();
+    if(z>=1000&&r.width>=16&&r.height>=16)return"ikon/overlay melayang";
+  }
+  return null;
+}
+// harus tetap ada & mencurigakan setelah 1,5 detik (supaya elemen sekejap tidak salah tangkap)
+function acConfirm(n,why){
+  if(n._acq)return;n._acq=1;
+  setTimeout(()=>{
+    if(acBusy||!n.isConnected)return;
+    const w=acSuspect(n);
+    if(w)acTrigger(w+" <"+n.tagName.toLowerCase()+(n.id?"#"+n.id:"")+">");
+  },1500);
+}
+function acScan(){
+  if(acBusy)return;
+  document.querySelectorAll("html > *, body > *").forEach(n=>{const w=acSuspect(n);if(w)acConfirm(n,w)});
+}
+function acStart(){
+  if(acObs||!window.MutationObserver)return;
+  document.querySelectorAll("html > *, body > *").forEach(n=>acKnown.add(n));
+  acObs=new MutationObserver(ms=>{
+    if(acBusy)return;
+    for(const m of ms)for(const n of m.addedNodes){
+      if(n.nodeType!==1)continue;
+      const w=acSuspect(n);if(w)acConfirm(n,w);
+    }
+  });
+  acObs.observe(document.documentElement,{childList:true,subtree:true});
+  setInterval(acScan,5000);
+}
+// cek nilai tidak wajar (uang/pasukan diubah lewat console, flag admin dipalsukan)
+function acIntegrity(){
+  if(!S||acBusy)return;
+  const legit=!!(S.rc&&S.rc.azferadmin);
+  if(S.admin&&!legit)return acTrigger("flag admin dimanipulasi");
+  if(S.admin||S.adminOK)return;
+  if(S.m>AC_MAX_MONEY||S.army>AC_MAX_ARMY)return acTrigger("uang/pasukan tidak wajar");
+}
+async function acTrigger(detail){
+  if(acBusy||!uid)return;
+  if(isBanned())return;
+  acBusy=true;
+  clearInterval(timer);clearInterval(pollTimer);
+  S=null;onlinePlayers=[];                // data hasil cheat tidak disimpan ke server
+  await applyBan(AC_BAN_DAYS,AC_REASON,"Anti-Cheat",detail);
+  showBan();
+}
 
 /* ===== SERVERS ===== */
 async function listServers(){
@@ -417,6 +574,8 @@ function pick(i,pub){
   for(let k=0;k<64;k++){const r=Math.random();ter.push(r<.1?1:r<.28?2:0)}
   S={c:i,m:c.m,food:100,pop:c.p,army:c.a,t:Array(64).fill(""),lv:Array(64).fill(1),ter,day:1,land:1,sel:"h",xp:0,lvl:1,en:rndEn(i),win_streak:0,mode:pub?"pub":"self",sid:pub||null};
   if(statsRow){S.m=statsRow.money||S.m;S.army=statsRow.army||S.army;S.lvl=statsRow.level||1;S.xp=statsRow.exp||0}
+  // akun yang pernah sah memakai kode admin tidak dianggap cheat saat nilainya besar
+  S.adminOK=!!(statsRow&&statsRow.game_stats&&statsRow.game_stats.rc&&statsRow.game_stats.rc.azferadmin);
   tab="b";applyWheelPrize();start();
   if(S.mode==="pub"){cloudSave();loadOnlinePlayers()}
 }
@@ -440,6 +599,7 @@ function shrinkMap(n){
 function sum(k){let s=0;for(let i=0;i<S.t.length;i++)if(S.t[i]===k)s+=(1+0.5*(S.lv[i]-1));return s}
 function tick(){
   if(!S)return;
+  acIntegrity();if(!S)return;
   if(S.admin){S.m=Math.max(S.m,1e18);S.army=Math.max(S.army,1e18)}
   const f=sum("f"),p=sum("p"),b=sum("b")+sum("mk")*1.5+sum("pd")*2;
   const eco=p*8+sum("ml")*10+sum("ps")*5+sum("bk")*8+sum("tb")*12+sum("bd")*10+sum("pl")*9+sum("tw")*6;
@@ -458,7 +618,7 @@ function tick(){
 function cap(){return 20+Math.floor(sum("h")*10+sum("ap")*22)}
 
 async function cloudSave(){
-  if(!S||!uid)return;
+  if(!S||!uid||acBusy)return;
   try{
     const body={
       level:S.lvl,exp:S.xp,money:Math.floor(S.m),army:Math.floor(S.army),
@@ -523,6 +683,7 @@ async function attackPlayer(pid){
 
   toast("⚔️ Menyerang "+tName+"...");
   await new Promise(r=>setTimeout(r,400));
+  if(!S)return;
 
   if(Math.random()<chance){
     // MENANG: ambil 1 wilayah = +5 kotak, musuh -1 wilayah / -5 kotak (via land)
@@ -561,7 +722,7 @@ async function attackPlayer(pid){
     await cloudSave();
   }
   await loadOnlinePlayers();
-  render();
+  if(S)render();
 }
 
 function renderStats(){
@@ -607,12 +768,12 @@ function render(){
           return`<div class="en">
             <span style="font-size:28px">${fl}</span>
             <div style="flex:1">
-              <b>${name}</b> <span class="mu">${country}</span><br>
+              <b>${esc(name)}</b> <span class="mu">${esc(country)}</span><br>
               <span class="mu">⚔️ ${fmt(p.army)} · 💰 ${fmt(p.money)} · Lv ${p.level||1}</span>
               <div class="bar"><span style="width:${ch}%"></span></div>
               <span class="mu">Peluang ${ch}%</span>
             </div>
-            <button class="btn-red" style="padding:8px 12px" onclick="attackPlayer('${p.player_id}')">⚔️</button>
+            <button class="btn-red" style="padding:8px 12px" onclick="attackPlayer('${esc(p.player_id)}')">⚔️</button>
           </div>`;
         }).join("");
       }
@@ -648,19 +809,89 @@ function start(){
   }
 }
 function menu(){clearInterval(timer);clearInterval(pollTimer);if(S)cloudSave();S=null;currentServer=null;onlinePlayers=[];lobby()}
+
+/* ===== LAYAR BAN ===== */
 function showBan(){
-  const reason=(metaRow&&metaRow.extra&&metaRow.extra.ban_reason)||(metaRow&&metaRow.ban_reason)||"Pelanggaran aturan";
-  const by=(metaRow&&metaRow.extra&&metaRow.extra.banned_by)||"";
-  const at=(metaRow&&metaRow.extra&&metaRow.extra.banned_at)||"";
+  clearInterval(timer);clearInterval(pollTimer);clearInterval(banTimer);
+  const m=metaRow||{is_banned:true,extra:{}};
+  const ex=m.extra||{};
+  const perm=isPermBan(m);
+  const reason=ex.ban_reason||m.ban_reason||"Pelanggaran aturan";
+  const by=ex.banned_by||"";
+  const at=ex.banned_at||"";
+  const days=banDaysOf(ex);
+  const rv=perm?null:reviewInfo(m);
+  const can=!perm&&!rv&&canReview(m);
+  const wa="https://wa.me/"+ADMIN_WA+"?text="+encodeURIComponent("Halo Admin/Dev, saya ingin meninjau akun saya yang di-ban.\nNama: "+(ACC?ACC.name:"-")+"\nID: "+(uid||"-")+"\nAlasan ban: "+reason);
+
+  const status=perm
+    ?`<div class="banst perm">🔴 BAN PERMANEN</div>
+      <p class="mu" style="margin-top:8px">Ban ini <b>tidak berakhir otomatis</b>. Hanya admin yang bisa membukanya.</p>`
+    :`<div class="banst temp">🟡 BAN SEMENTARA${days?" · "+days+" hari":""}</div>
+      <p style="margin-top:8px">Sisa waktu: <b id="banLeft">-</b></p>
+      <p class="mu">Berakhir: ${new Date(ex.ban_until).toLocaleString("id-ID")}. Setelah itu akun terbuka otomatis.</p>`;
+
+  const review=perm
+    ?`<p class="mu">🔍 Tinjau Otomatis tidak tersedia untuk ban permanen. Silakan hubungi admin.</p>`
+    :rv
+    ?`<p>🔍 Sedang ditinjau… akun terbuka dalam <b id="revLeft">-</b></p>
+      <p class="mu">Tunggu halaman ini terbuka sendiri, jangan ditutup.</p>`
+    :can
+    ?`<p class="mu">Ban kurang dari ${REVIEW_MAX_DAYS} hari bisa ditinjau otomatis. Setelah ditekan, cukup tunggu 3 menit dan ban terbuka sendiri.</p>
+      <button id="revBtn" class="btn" onclick="requestReview()">🔍 Tinjau Otomatis</button>`
+    :`<p class="mu">🔍 Tinjau Otomatis tidak tersedia untuk ban ini. Silakan hubungi admin.</p>`;
+
   $("app").innerHTML=`<div class="hero"><h1>🚫 AKUN DIBANNED</h1><p>Battle of the Nations</p></div>
   <div class="card" style="text-align:center">
-    <h2 style="color:var(--bad);margin-bottom:10px">Akun Diblokir</h2>
-    <p><b>Alasan:</b> ${reason}</p>
-    ${by?`<p class="mu">Oleh: ${by}</p>`:""}
+    ${status}
+    <p style="margin-top:12px"><b>Alasan:</b> ${esc(reason)}</p>
+    ${by?`<p class="mu">Oleh: ${esc(by)}</p>`:""}
     ${at?`<p class="mu">Pada: ${new Date(at).toLocaleString("id-ID")}</p>`:""}
-    <p class="mu" style="margin-top:10px">ID: ${uid||"-"}</p>
-    <p class="mu">Hubungi admin jika ini kesalahan.</p>
+    <p class="mu" style="margin-top:10px">ID: ${esc(uid||"-")}</p>
+  </div>
+  <div class="card" style="text-align:center">
+    <b>Tinjau Otomatis</b>
+    <div style="margin-top:8px">${review}</div>
+  </div>
+  <div class="card" style="text-align:center">
+    <b>📞 Tinjau Akun ke Admin/Dev</b>
+    <p class="mu" style="margin-top:6px">Merasa ini kesalahan? Hubungi Admin/Dev di nomor:</p>
+    <p style="font-size:20px;font-weight:800;margin-top:6px;user-select:all">${ADMIN_PHONE}</p>
+    <a class="wa" href="${wa}" target="_blank" rel="noopener">💬 Chat WhatsApp Admin</a>
+    <p class="mu" style="margin-top:8px">Sertakan ID akun di atas saat menghubungi.</p>
   </div>`;
+  banTimer=setInterval(banTick,1000);banTick();
+}
+async function banTick(){
+  if(!metaRow||!metaRow.is_banned){clearInterval(banTimer);return}
+  const ex=metaRow.extra||{};const now=Date.now();
+  const rv=reviewInfo(metaRow);
+  const bl=$("banLeft");if(bl&&ex.ban_until)bl.textContent=fmtLeft(new Date(ex.ban_until)-now);
+  const rl=$("revLeft");if(rl&&rv)rl.textContent=fmtLeft(rv.until-now);
+  const habis=(ex.ban_until&&new Date(ex.ban_until)<=now)||(rv&&rv.until<=now);
+  if(habis){
+    clearInterval(banTimer);
+    await loadMeta();                       // loadMeta otomatis membuka ban yang sudah habis
+    if(!isBanned()){toast("✅ Akun dibuka kembali");lobby()}
+    else banTimer=setInterval(banTick,5000); // gagal terhubung, coba lagi
+  }
+}
+async function requestReview(){
+  if(!metaRow||!canReview(metaRow))return toast("Tinjau Otomatis tidak tersedia");
+  const btn=$("revBtn");if(btn){btn.disabled=true;btn.textContent="Memproses..."}
+  const nowIso=new Date().toISOString();
+  const until=new Date(Date.now()+REVIEW_MS).toISOString();
+  try{
+    for(const r of metaRows){
+      if(!r.is_banned||!r.id)continue;
+      const ex=r.extra||{};
+      const ne={...ex,review_for:banKey(ex),review_requested_at:nowIso,review_until:until};
+      await api("PATCH",API_META+"?id="+r.id,KEY_META,{extra:ne});
+      r.extra=ne;
+    }
+    toast("🔍 Tinjau dimulai. Tunggu 3 menit.");
+  }catch(e){toast("Gagal: "+e.message)}
+  showBan();
 }
 
 async function lobby(){
@@ -669,7 +900,7 @@ async function lobby(){
   await ensureStats(ACC?.name);
   const name=ACC?.name||"Pemain";const lvl=statsRow?.level||1;const exp=statsRow?.exp||0;
   $("app").innerHTML=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Lobby</p></div>
-  <div class="card"><div style="display:flex;justify-content:space-between"><span>👤 <b>${name}</b></span><span class="rank">Lv ${lvl} · ${getRank((lvl||1)*100+exp)}</span></div>
+  <div class="card"><div style="display:flex;justify-content:space-between"><span>👤 <b>${esc(name)}</b></span><span class="rank">Lv ${lvl} · ${getRank((lvl||1)*100+exp)}</span></div>
   <p class="mu" style="margin-top:4px">ID: ${uid}</p></div>
   <button class="btn-blue" onclick="serverScreen()">🌐 Server Public (PvP Online)</button>
   <button class="btn" onclick="countryScreen(false)">🤖 Main Self (vs AI)</button>
@@ -750,7 +981,7 @@ function filterNegara(){
     n++;
     const who=taken[c.n];
     if(who){
-      h+=`<button class="card" disabled style="text-align:center;opacity:.45"><span style="font-size:28px">${c.f}</span><br><b style="font-size:13px">${c.n}</b><br><span class="mu">🔒 ${who}</span></button>`;
+      h+=`<button class="card" disabled style="text-align:center;opacity:.45"><span style="font-size:28px">${c.f}</span><br><b style="font-size:13px">${c.n}</b><br><span class="mu">🔒 ${esc(who)}</span></button>`;
     }else{
       h+=`<button class="card" style="text-align:center" onclick="pick(${i},${pub?`'${pub}'`:false})"><span style="font-size:28px">${c.f}</span><br><b style="font-size:13px">${c.n}</b></button>`;
     }
@@ -860,6 +1091,7 @@ async function saveName(){
   await ensureStats(u);toast("Halo, "+u+"!");lobby();
 }
 (async function boot(){
+  acStart();
   uid=ls("negara_uid");const name=ls("negara_name");
   if(uid&&name){ACC={name,id:uid};await ensureMeta();if(isBanned()){showBan();return}await ensureStats(name);lobby()}
   else nameScreen();
