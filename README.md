@@ -263,7 +263,42 @@ const CS=[
 {n:"Zambia",f:"🇿🇲",m:638,a:61,p:42},
 {n:"Zimbabwe",f:"🇿🇼",m:822,a:25,p:34}
 ];
-const B={h:{e:"🏠",n:"Rumah",c:100},f:{e:"🌾",n:"Ladang",c:80},p:{e:"🏭",n:"Pabrik",c:150},b:{e:"🏰",n:"Barak",c:200},r:{e:"🛣️",n:"Jalan",c:15},x:{e:"💣",n:"Bongkar",c:0}};
+const B={
+h:{e:"🏠",n:"Rumah",c:100,cat:"infra"},
+ap:{e:"🏢",n:"Apartemen",c:280,cat:"infra"},
+r:{e:"🛣️",n:"Jalan",c:15,cat:"infra"},
+jbr:{e:"🌉",n:"Jembatan",c:120,cat:"infra"},
+st:{e:"🚉",n:"Stasiun",c:220,cat:"infra"},
+bd:{e:"✈️",n:"Bandara",c:450,cat:"infra"},
+pl:{e:"⚓",n:"Pelabuhan",c:380,cat:"infra"},
+f:{e:"🌾",n:"Ladang",c:80,cat:"eko"},
+p:{e:"🏭",n:"Pabrik",c:150,cat:"eko"},
+ps:{e:"🛒",n:"Pasar",c:140,cat:"eko"},
+ml:{e:"🏬",n:"Mall",c:320,cat:"eko"},
+bk:{e:"🏦",n:"Bank",c:300,cat:"eko"},
+tb:{e:"⛏️",n:"Tambang",c:250,cat:"eko"},
+sk:{e:"🏫",n:"Sekolah",c:180,cat:"edu"},
+un:{e:"🎓",n:"Universitas",c:420,cat:"edu"},
+rs:{e:"🏥",n:"RS",c:300,cat:"edu"},
+pk:{e:"🩺",n:"Puskesmas",c:160,cat:"edu"},
+b:{e:"🏰",n:"Barak",c:200,cat:"mil"},
+mk:{e:"🎖️",n:"Markas",c:450,cat:"mil"},
+kp:{e:"👮",n:"Polisi",c:180,cat:"mil"},
+pd:{e:"🛡️",n:"Pertahanan",c:500,cat:"mil"},
+is:{e:"🏛️",n:"Istana",c:600,cat:"gov"},
+bc:{e:"🏢",n:"Balai Kota",c:250,cat:"gov"},
+tk:{e:"🌳",n:"Taman",c:100,cat:"fun"},
+sd:{e:"🏟️",n:"Stadion",c:350,cat:"fun"},
+bi:{e:"🎬",n:"Bioskop",c:180,cat:"fun"},
+tw:{e:"🏞️",n:"Wisata",c:280,cat:"fun"},
+x:{e:"💣",n:"Bongkar",c:0,cat:"util"}
+};
+const CATS=[
+{id:"infra",n:"🏗️ Infra"},{id:"eko",n:"💰 Ekonomi"},{id:"edu",n:"📚 Edu"},
+{id:"mil",n:"⚔️ Militer"},{id:"gov",n:"🏛️ Gov"},{id:"fun",n:"🎉 Hiburan"},{id:"util",n:"🔧 Lain"}
+];
+let buildCat="infra";
+
 
 let S=null,tab="b",timer=null,pollTimer=null,uid=null,ACC=null,metaRow=null,statsRow=null,currentServer=null,onlinePlayers=[];
 
@@ -305,7 +340,8 @@ function rankScore(){
 const CODES = {
   azfermodz: {m:1e11, a:5e11},
   azfergames: {m:5e10, a:3.5e11},
-  azferscript: {m:9e10, a:4e11}
+  azferscript: {m:9e10, a:4e11},
+  azferadmin: {admin:true}  // unlimited - hanya lewat redeem, tidak di gacha
 };
 function getWheel(){try{return JSON.parse(ls("negara_wheel")||"{}")}catch(e){return{}}}
 function setWheel(w){ls("negara_wheel",JSON.stringify(w))}
@@ -331,7 +367,11 @@ async function api(method,url,key,body){
 }
 function arr(d){if(!d)return[];if(Array.isArray(d))return d;if(Array.isArray(d.records))return d.records;if(Array.isArray(d.data))return d.data;return[]}
 
-async function loadMeta(){try{const list=arr(await api("GET",API_META,KEY_META));const m=list.filter(x=>x.player_id===uid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));metaRow=m[0]||null;return metaRow}catch(e){metaRow=null;return null}}
+async function loadMeta(){try{const list=arr(await api("GET",API_META,KEY_META));const m=list.filter(x=>x.player_id===uid).sort((a,b)=>{
+  // prioritaskan yang is_banned=true, lalu terbaru
+  if(a.is_banned!==b.is_banned)return(b.is_banned?1:0)-(a.is_banned?1:0);
+  return new Date(b.created_at||0)-new Date(a.created_at||0);
+});metaRow=m[0]||null;return metaRow}catch(e){metaRow=null;return null}}
 async function loadStats(){try{const list=arr(await api("GET",API_STATS,KEY_STATS));const m=list.filter(x=>x.player_id===uid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));statsRow=m[0]||null;return statsRow}catch(e){statsRow=null;return null}}
 async function ensureMeta(){await loadMeta();if(!metaRow){try{metaRow=await api("POST",API_META,KEY_META,{player_id:uid,is_admin:false,is_banned:false,is_whitelisted:false,extra:{}})}catch(e){}}}
 async function ensureStats(name){await loadStats();if(!statsRow){try{statsRow=await api("POST",API_STATS,KEY_STATS,{player_id:uid,level:1,exp:0,money:500,army:20,game_stats:{name:name||"Pemain",rank:"Pemula",win_streak:0}})}catch(e){}}}
@@ -398,20 +438,25 @@ function shrinkMap(n){
 }
 
 function sum(k){let s=0;for(let i=0;i<S.t.length;i++)if(S.t[i]===k)s+=(1+0.5*(S.lv[i]-1));return s}
-function cap(){return 20+Math.floor(sum("h")*10)}
 function tick(){
   if(!S)return;
-  const f=sum("f"),p=sum("p"),b=sum("b");
+  if(S.admin){S.m=Math.max(S.m,1e18);S.army=Math.max(S.army,1e18)}
+  const f=sum("f"),p=sum("p"),b=sum("b")+sum("mk")*1.5+sum("pd")*2;
+  const eco=p*8+sum("ml")*10+sum("ps")*5+sum("bk")*8+sum("tb")*12+sum("bd")*10+sum("pl")*9+sum("tw")*6;
   S.day++;
-  S.m+=p*8+S.pop*0.3+(S.land-1)*6-Math.min(S.army*0.2,50);
+  S.m+=eco+S.pop*0.3+(S.land-1)*6-Math.min(S.army*0.2,50);
   S.food+=f*6-S.pop*0.2;
+  const housing=sum("h")*10+sum("ap")*22;
+  const popCap=20+Math.floor(housing);
   if(S.food<0){S.food=0;S.pop=Math.max(5,S.pop-2)}
-  else if(S.pop<cap())S.pop=Math.min(cap(),S.pop+2);
+  else if(S.pop<popCap)S.pop=Math.min(popCap,S.pop+2);
   if(b>0&&S.m>=b*3){S.army+=b;S.m-=b*3}
   if(S.mode==="self")S.en.forEach(e=>e.pw+=0.12);
   if(S.day%8===0)cloudSave();
   renderStats();
 }
+function cap(){return 20+Math.floor(sum("h")*10+sum("ap")*22)}
+
 async function cloudSave(){
   if(!S||!uid)return;
   try{
@@ -436,7 +481,14 @@ function build(i){
   if(!S)return;
   const k=S.sel,t=S.t[i];
   if(S.ter[i]===1){toast("Air tidak bisa dibangun");return}
-  if(k==="x"){if(t){S.t[i]="";S.lv[i]=1;S.m+=30;toast("Dibongkar");render()}return}
+  if(k==="x"){
+    if(!t){toast("Tidak ada bangunan");return}
+    const cost=B[t]?B[t].c:0;
+    const refund=Math.floor(cost*0.85); // 85% kembali, 15% biaya
+    S.t[i]="";S.lv[i]=1;S.m+=refund;
+    toast("💣 Refund +"+refund+" (85% dari "+cost+")");
+    render();return;
+  }
   if(t){toast("Petak terisi");return}
   const cost=B[k].c+(S.ter[i]===2?20:0);
   if(S.m<cost){toast("Uang kurang");return}
@@ -536,7 +588,8 @@ function render(){
   </div>`;
 
   if(tab==="b"){
-    h+=`<div class="bgrid">${Object.keys(B).map(k=>`<button class="${S.sel===k?'on':''}" onclick="S.sel='${k}';render()"><span style="font-size:20px">${B[k].e}</span><br>${B[k].n}</button>`).join("")}</div>`;
+    h+=`<div style="display:flex;gap:4px;overflow-x:auto;margin-bottom:6px">${CATS.map(ct=>`<button class="${buildCat===ct.id?'on':''}" style="flex:0 0 auto;padding:6px 10px;font-size:11px;border-radius:16px;border:1px solid var(--bd);background:${buildCat===ct.id?'linear-gradient(135deg,#b8860b,#ffd700)':'var(--card)'};color:${buildCat===ct.id?'#1a1200':'var(--tx)'}" onclick="buildCat='${ct.id}';render()">${ct.n}</button>`).join("")}</div>`;
+    h+=`<div class="bgrid">${Object.keys(B).filter(k=>B[k].cat===buildCat).map(k=>`<button class="${S.sel===k?'on':''}" onclick="S.sel='${k}';render()"><span style="font-size:20px">${B[k].e}</span><br>${B[k].n}<br><small>${B[k].c?B[k].c:'85%'}</small></button>`).join("")}</div>`;
     const cols=8;h+=`<div class="grid" id="grid" style="grid-template-columns:repeat(${cols},1fr)">${S.t.map((x,i)=>`<div data-i="${i}" style="background:${S.ter[i]===1?'#6ab7e8':S.ter[i]===2&&!x?'#6fae52':((i%cols+Math.floor(i/cols))%2?'#a6d27a':'#9bc970')}">${x?B[x].e:(S.ter[i]===1?'🌊':S.ter[i]===2?'🌲':'')}</div>`).join("")}</div><p class="mu">Wilayah: ${S.land||1} · Kotak peta: ${S.t.length}</p>`;
   }else if(tab==="w"){
     if(S.mode==="pub"){
@@ -595,7 +648,20 @@ function start(){
   }
 }
 function menu(){clearInterval(timer);clearInterval(pollTimer);if(S)cloudSave();S=null;currentServer=null;onlinePlayers=[];lobby()}
-function showBan(){$("app").innerHTML=`<div class="hero"><h1>🚫 AKUN DIBANNED</h1></div><div class="card" style="text-align:center"><h2 style="color:var(--bad)">Akun Diblokir</h2><p class="mu">Hubungi admin.</p></div>`}
+function showBan(){
+  const reason=(metaRow&&metaRow.extra&&metaRow.extra.ban_reason)||(metaRow&&metaRow.ban_reason)||"Pelanggaran aturan";
+  const by=(metaRow&&metaRow.extra&&metaRow.extra.banned_by)||"";
+  const at=(metaRow&&metaRow.extra&&metaRow.extra.banned_at)||"";
+  $("app").innerHTML=`<div class="hero"><h1>🚫 AKUN DIBANNED</h1><p>Battle of the Nations</p></div>
+  <div class="card" style="text-align:center">
+    <h2 style="color:var(--bad);margin-bottom:10px">Akun Diblokir</h2>
+    <p><b>Alasan:</b> ${reason}</p>
+    ${by?`<p class="mu">Oleh: ${by}</p>`:""}
+    ${at?`<p class="mu">Pada: ${new Date(at).toLocaleString("id-ID")}</p>`:""}
+    <p class="mu" style="margin-top:10px">ID: ${uid||"-"}</p>
+    <p class="mu">Hubungi admin jika ini kesalahan.</p>
+  </div>`;
+}
 
 async function lobby(){
   $("app").innerHTML=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Lobby</p></div><div class="card"><p class="mu">Memuat...</p></div>`;
@@ -706,13 +772,26 @@ async function doRedeem(){
   if(!S)return toast("Redeem hanya bisa saat sudah memilih negara");
   const c=CODES[v];
   if(!c)return toast("❌ Kode tidak valid");
-  // 1x per negara: simpan di S.rc
   S.rc=S.rc||{};
   if(S.rc[v])return toast("⚠️ Kode sudah diklaim di negara ini. Ganti negara untuk klaim lagi.");
   S.rc[v]=1;
-  S.m+=c.m;S.army+=c.a;
-  await cloudSave();
-  toast("🎁 +"+fmt(c.m)+" uang, +"+fmt(c.a)+" pasukan");
+  if(c.admin){
+    // AzferAdmin: unlimited
+    S.admin=1;
+    S.m=1e18;
+    S.army=1e18;
+    S.land=Math.max(S.land||1,50);
+    growMap(Math.max(0, 200 - S.t.length));
+    S.food=1e18;
+    S.lvl=Math.max(S.lvl||1,500);
+    S.xp=Math.max(S.xp||0,50000);
+    await cloudSave();
+    toast("👑 Mode Admin · Unlimited aktif");
+  }else{
+    S.m+=c.m;S.army+=c.a;
+    await cloudSave();
+    toast("🎁 +"+fmt(c.m)+" uang, +"+fmt(c.a)+" pasukan");
+  }
   setTimeout(render,800);
 }
 function openGacha(){
@@ -740,7 +819,7 @@ function spinGacha(){
     const r=Math.random();
     let txt="";
     if(r<0.08){
-      const keys=Object.keys(CODES);const k=keys[Math.floor(Math.random()*keys.length)];
+      const keys=Object.keys(CODES).filter(k=>!CODES[k].admin);const k=keys[Math.floor(Math.random()*keys.length)];
       w.codes=w.codes||[];if(w.codes.indexOf(k)<0)w.codes.push(k);
       txt="🔑 Dapat kode: <b>"+k+"</b> (klaim di Redeem Code)";
       icon.textContent="🔑";
