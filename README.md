@@ -42,6 +42,29 @@ input,select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--b
 .wa{display:block;text-align:center;text-decoration:none;background:linear-gradient(135deg,#2f9e44,#37b24d);color:#fff;border-radius:12px;padding:11px 14px;font-weight:700;margin-top:10px}
 #toast{position:fixed;left:50%;bottom:16px;transform:translate(-50%,30px);background:#1a1200;color:#ffd700;border:1px solid #d4a017;padding:11px 18px;border-radius:22px;font-size:14px;opacity:0;transition:.3s;max-width:90%;text-align:center;z-index:20}
 #toast.s{opacity:1;transform:translate(-50%,0)}
+.card{transform:translateZ(0);box-shadow:0 8px 24px rgba(0,0,0,.45),0 0 0 1px rgba(212,160,23,.12);transition:transform .2s,box-shadow .2s}
+.card:active{transform:scale(.99)}
+.hero{box-shadow:0 12px 40px rgba(212,160,23,.25),inset 0 1px 0 rgba(255,215,0,.3);position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,rgba(255,215,0,.12) 50%,transparent 60%);animation:shine 4s infinite}
+@keyframes shine{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.grid{perspective:600px;transform-style:preserve-3d;box-shadow:inset 0 0 30px rgba(0,0,0,.35),0 10px 28px rgba(0,0,0,.4)}
+.grid div{box-shadow:inset 0 -2px 4px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.08);transition:transform .15s}
+.grid div:active{transform:translateY(2px) scale(.96)}
+.btn,.btn-blue,.btn-red{box-shadow:0 4px 14px rgba(0,0,0,.35),0 1px 0 rgba(255,255,255,.15) inset;text-shadow:0 1px 0 rgba(0,0,0,.2)}
+.btn:active,.btn-blue:active{box-shadow:0 1px 4px rgba(0,0,0,.4) inset}
+.rank{box-shadow:0 0 16px rgba(255,215,0,.5),0 2px 6px rgba(0,0,0,.4)}
+.stats div{box-shadow:inset 0 2px 6px rgba(0,0,0,.3),0 1px 0 rgba(255,215,0,.1);transform:translateZ(4px)}
+.bgrid button{box-shadow:0 3px 10px rgba(0,0,0,.3);transition:transform .12s,box-shadow .12s}
+.bgrid button:active{transform:translateY(2px);box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.acc-item{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--bd)}
+.acc-item:first-child{border-top:0}
+.chatbox{height:52vh;overflow-y:auto;background:rgba(0,0,0,.25);border:1px solid var(--bd);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:85%;padding:8px 10px;border-radius:12px;background:#2a2314;font-size:14px;line-height:1.35;word-break:break-word;align-self:flex-start}
+.msg.me{align-self:flex-end;background:linear-gradient(135deg,#b8860b,#ffd700);color:#1a1200}
+.msg .nm{display:block;font-size:11px;font-weight:800;color:var(--ac);margin-bottom:2px;cursor:pointer}
+.msg.me .nm{color:#5c4a00;cursor:default}
+.msg .tm{font-size:10px;font-weight:400;opacity:.6;margin-left:6px}
+.msg.sys{align-self:center;background:transparent;color:var(--mu);font-size:12px;text-align:center;padding:2px 6px}
 </style>
 </head>
 <body>
@@ -51,6 +74,9 @@ const API_STATS="https://data-base-fazxy.lovable.app/api/public/v1/player_stats"
 const KEY_STATS="dk_74b1821ecf174d93ac2b432d1709b858";
 const API_META="https://data-base-fazxy.lovable.app/api/public/v1/player_meta";
 const KEY_META="dk_9b7f76500c7e4b5db41c34636ebce111";
+const API_CHAT="https://data-base-fazxy.lovable.app/api/public/v1/server_chat";
+const KEY_CHAT="dk_fa72a2910ae64758862bc32b6e73e43d";
+const CHAT_KEEP_MS=24*3600*1000,CHAT_MAX=200,CHAT_SHOW=60;
 const SRV_PREFIX="SERVER|",QUEST_PREFIX="QUEST|";
 const DAY_MS=24*3600*1000;
 const ADMIN_PHONE="0858-8238-2854",ADMIN_WA="6285882382854";
@@ -134,7 +160,391 @@ function packLabel(n){if(n>=1e12)return(n/1e12).toFixed(n%1e12===0?0:1)+" T";if(
 function costMoney(a){return Math.round(a/1e6*100000)}
 function costArmy(a){return Math.round(a/1e6*500000)}
 function getCart(){try{return JSON.parse(ls("negara_cart")||"{}")}catch(e){return{}}}
+
 function setCart(c){ls("negara_cart",JSON.stringify(c))}
+const TRADE_PREFIX="TRADE|";
+function genTradeId(){return "T"+Math.random().toString(36).slice(2,9).toUpperCase()}
+
+/* ===== CHAT PUBLIC (ngobrol, daftar pemain, trade) — terpisah dari Server PVP ===== */
+const CHAT_ROOM="PUBLIK";
+let chatTab="chat",chatTimer=null,chatSig="",chatCleaned=false,chatShape="extra",chatLastSend=0,chatLastText="",tradeCtx="lobby",plMode="players",plOnly=false;
+async function chatApi(method,body,qs){
+  try{return await api(method,API_CHAT+(qs||""),KEY_CHAT,body)}
+  catch(e){throw new Error("[chat] "+method+" gagal: "+e.message)}
+}
+// baca data pesan: mendukung kolom "extra" maupun kolom datar
+function cd(m){return(m.extra&&typeof m.extra==="object"&&m.extra.text!==undefined)?m.extra:m}
+async function chatSend(payload){
+  const withExtra={player_id:uid,extra:payload};
+  const flat={player_id:uid,...payload};
+  if(chatShape==="extra"){
+    try{return await chatApi("POST",withExtra)}
+    catch(e){if(!/\b(400|422)\b/.test(e.message))throw e;chatShape="flat"}
+  }
+  return await chatApi("POST",flat);
+}
+function sysChat(text){
+  chatSend({kind:"sys",server:CHAT_ROOM,name:"Sistem",text,at:new Date().toISOString()}).catch(()=>{});
+}
+function chatTabsHtml(){
+  return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>💬 Chat Public</b><button class="btn-gray" style="padding:4px 10px" onclick="leaveChat()">←</button></div>
+  <div class="tabs" style="margin:10px 0 0"><button class="${chatTab==="chat"?"on":""}" onclick="openChat('chat')">💬 Chat</button><button class="${chatTab==="players"?"on":""}" onclick="openChat('players')">👥 Pemain</button><button class="${chatTab==="trade"?"on":""}" onclick="openChat('trade')">🤝 Trade</button></div></div>`;
+}
+function openChat(t){
+  if(!uid)return;
+  chatTab=t||"chat";
+  clearInterval(chatTimer);chatTimer=null;
+  if(chatTab==="trade"){tradeCtx="chat";openTrade()}
+  else if(chatTab==="players")renderPlayers();
+  else renderChat();
+}
+function leaveChat(){clearInterval(chatTimer);chatTimer=null;lobby()}
+function renderChat(){
+  $("app").innerHTML=chatTabsHtml()+`<div class="chatbox" id="chatBox"><p class="mu" style="text-align:center;margin:auto">Memuat chat...</p></div>
+  <div style="display:flex;gap:6px;margin-top:8px"><input id="chatIn" maxlength="${CHAT_MAX}" placeholder="Ngobrol di sini..." autocomplete="off" style="margin:0" onkeydown="if(event.key==='Enter')sendChat()"><button class="btn" style="width:auto;margin:0;padding:10px 16px" onclick="sendChat()">Kirim</button></div>
+  <p class="mu" style="margin-top:6px">Ruang santai untuk ngobrol. Ketuk nama pemain untuk memilihnya sebagai tujuan Trade. Pesan terhapus otomatis setelah 24 jam.</p>`;
+  chatSig="";chatCleaned=false;
+  loadChat(true);
+  chatTimer=setInterval(loadChat,4000);
+}
+async function loadChat(force){
+  const box=$("chatBox");
+  if(!box){clearInterval(chatTimer);chatTimer=null;return}
+  try{
+    const list=arr(await chatApi("GET"));
+    const now=Date.now();
+    const tOf=m=>new Date(cd(m).at||m.created_at||0).getTime();
+    // bersihkan pesan lama (maks 10 per sekali buka)
+    if(!chatCleaned){
+      chatCleaned=true;
+      list.filter(m=>m.id&&tOf(m)>0&&now-tOf(m)>CHAT_KEEP_MS).slice(0,10).forEach(m=>{chatApi("DELETE",null,"?id="+m.id).catch(()=>{})});
+    }
+    const msgs=list.filter(m=>cd(m).server===CHAT_ROOM&&tOf(m)>0&&now-tOf(m)<=CHAT_KEEP_MS)
+      .sort((a,b)=>tOf(a)-tOf(b)).slice(-CHAT_SHOW);
+    const last=msgs[msgs.length-1];
+    const sig=msgs.length+"|"+(last?(last.id||tOf(last)):"");
+    if(sig===chatSig&&!force)return;
+    chatSig=sig;
+    const near=box.scrollHeight-box.scrollTop-box.clientHeight<90;
+    box.innerHTML=msgs.length?msgs.map(m=>{
+      const d=cd(m);
+      if(d.kind==="sys")return `<div class="msg sys">${esc(d.text)}</div>`;
+      const me=m.player_id===uid;
+      const tm=new Date(tOf(m)).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"});
+      const nm=esc(d.name||m.player_id);
+      return `<div class="msg${me?" me":""}"><span class="nm"${me?"":` onclick="pickChatTarget('${esc(m.player_id)}','${esc(d.name||"")}')"`}>${esc(d.flag||"")} ${nm}<span class="tm">${tm}</span></span>${esc(d.text)}</div>`;
+    }).join(""):`<p class="mu" style="text-align:center;margin:auto">Belum ada pesan. Mulai ngobrol!</p>`;
+    if(near||force)box.scrollTop=box.scrollHeight;
+  }catch(e){
+    box.innerHTML=`<p class="mu" style="color:var(--bad);margin:auto;text-align:center">${esc(e.message)}</p>`;
+  }
+}
+async function sendChat(){
+  const inp=$("chatIn");if(!inp)return;
+  const text=inp.value.trim().slice(0,CHAT_MAX);
+  if(!text)return;
+  const now=Date.now();
+  if(now-chatLastSend<1500)return toast("Pelan-pelan, jangan spam");
+  if(text===chatLastText&&now-chatLastSend<15000)return toast("Pesan yang sama baru saja dikirim");
+  chatLastSend=now;chatLastText=text;inp.value="";
+  try{
+    await chatSend({kind:"msg",server:CHAT_ROOM,uid,name:ACC?.name||"Pemain",flag:"",text,at:new Date().toISOString()});
+    loadChat(true);
+  }catch(e){toast(e.message);inp.value=text}
+}
+function pickChatTarget(id,name){
+  if(id===uid)return;
+  window._tradeTo={id,name};
+  toast("🤝 Tujuan trade: "+name+" · buka tab Trade");
+}
+
+/* ===== DAFTAR PEMAIN (dipakai di tab Pemain & Trade) ===== */
+let _playerCache=[];
+async function loadAllPlayers(){
+  const list=arr(await api("GET",API_STATS,KEY_STATS));
+  const lastChat={};
+  try{arr(await chatApi("GET")).forEach(m=>{const d=cd(m);if(d.server!==CHAT_ROOM||d.kind==="sys")return;const t=new Date(d.at||m.created_at||0).getTime();if(t>(lastChat[m.player_id]||0))lastChat[m.player_id]=t})}catch(e){}
+  const map={};
+  list.forEach(p=>{
+    const id=String(p.player_id||"");
+    if(!id||id.startsWith(SRV_PREFIX)||id.startsWith(TRADE_PREFIX)||id.startsWith(QUEST_PREFIX)||id.startsWith("BOTTRADE|"))return;
+    if(!map[id]||new Date(p.created_at||0)>new Date(map[id].created_at||0))map[id]=p;
+  });
+  const now=Date.now();
+  return Object.values(map).map(p=>{
+    const gs=p.game_stats||{};
+    const la=Math.max(gs.last_active?new Date(gs.last_active).getTime():0,lastChat[p.player_id]||0);
+    return{id:p.player_id,name:gs.name||p.name||p.player_id,level:p.level||1,exp:p.exp||0,
+      country:gs.country||"",server:gs.server||"",online:la>0&&now-la<5*60000,last:la,me:p.player_id===uid};
+  });
+}
+async function refreshPlayers(){
+  const el=$("plList");if(!el)return;
+  el.innerHTML="<p class='mu'>Memuat...</p>";
+  try{_playerCache=await loadAllPlayers();filterPlayerList()}
+  catch(e){el.innerHTML=`<p class="mu" style="color:var(--bad)">${esc(e.message)}</p>`}
+}
+function playerRowHtml(p){
+  const rk=getRank(p.level*100+p.exp);
+  const fl=p.country?flagOf(p.country):"";
+  const acts=plMode==="players"
+    ?(p.me?`<span class="badge blue">Kamu</span>`
+      :`<button class="btn-gray" style="padding:8px 10px" onclick="copyId('${esc(p.id)}')">📋</button><button class="btn" style="width:auto;margin:0;padding:8px 12px" onclick="tradeWith('${esc(p.id)}','${esc(p.name)}')">🤝</button>`)
+    :`<button class="btn" style="width:auto;margin:0;padding:8px 12px" onclick="selectTradePlayer('${esc(p.id)}','${esc(p.name)}')">Pilih</button>`;
+  return `<div class="acc-item"><div style="min-width:0"><b>${p.online?"🟢":"⚪"} ${esc(p.name)}</b> ${fl}<br>
+    <span class="rank" style="font-size:10px;padding:1px 7px">${esc(rk)}</span> <span class="mu">Lv ${p.level}${p.server?" · "+esc(p.server):""}</span><br>
+    <span class="mu" style="font-size:11px">${esc(p.id)}</span></div><div style="display:flex;gap:6px;align-items:center">${acts}</div></div>`;
+}
+function filterPlayerList(){
+  const el=$("plList");if(!el)return;
+  const q=($("plSearch")?.value||"").toLowerCase().trim();
+  let rows=_playerCache.filter(p=>plMode==="players"||!p.me);
+  if(plMode==="players"&&plOnly)rows=rows.filter(p=>p.online);
+  if(q)rows=rows.filter(p=>(p.name||"").toLowerCase().includes(q)||(p.id||"").toLowerCase().includes(q)||(p.country||"").toLowerCase().includes(q));
+  rows.sort((a,b)=>(b.online-a.online)||(a.name||"").localeCompare(b.name||""));
+  const online=_playerCache.filter(p=>p.online).length;
+  const cnt=$("plCount");if(cnt)cnt.textContent=rows.length+" pemain ditampilkan · 🟢 "+online+" online dari "+_playerCache.length;
+  if(!rows.length){el.innerHTML="<p class='mu'>Pemain tidak ditemukan</p>";return}
+  el.innerHTML=rows.slice(0,50).map(playerRowHtml).join("")+(rows.length>50?`<p class="mu">+${rows.length-50} lainnya, gunakan pencarian</p>`:"");
+}
+function setPlOnly(v){
+  plOnly=v;
+  const a=$("plAll"),o=$("plOn");if(a)a.className=v?"":"on";if(o)o.className=v?"on":"";
+  filterPlayerList();
+}
+function copyId(id){try{navigator.clipboard.writeText(id).then(()=>toast("ID disalin"),()=>toast(id))}catch(e){toast(id)}}
+function tradeWith(id,name){window._tradeTo={id,name};openChat("trade")}
+function renderPlayers(){
+  plMode="players";plOnly=false;
+  $("app").innerHTML=chatTabsHtml()+`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>👥 Daftar Pemain</b>
+    <button class="btn-gray" style="padding:4px 10px" onclick="refreshPlayers()">⟳</button></div>
+    <input id="plSearch" placeholder="🔎 Cari nama, ID, atau negara" oninput="filterPlayerList()">
+    <div class="tabs" style="margin:8px 0 0"><button id="plAll" class="on" onclick="setPlOnly(false)">Semua</button><button id="plOn" onclick="setPlOnly(true)">🟢 Online</button></div>
+    <p class="mu" id="plCount" style="margin-top:8px"></p>
+    <div id="plList"><p class="mu">Memuat...</p></div></div>`;
+  refreshPlayers();
+}
+
+/* ===== TRADE (hanya di Lobby & Chat Public) ===== */
+async function openTrade(ctx){
+  if(ctx)tradeCtx=ctx;
+  if(S)return toast("Trade hanya di Lobby & Chat Public");
+  plMode="trade";plOnly=false;
+  clearInterval(chatTimer);chatTimer=null;
+  const head=tradeCtx==="chat"?chatTabsHtml():`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><b>🤝 Trade</b><button class="btn-gray" style="padding:4px 10px" onclick="lobby()">←</button></div></div>`;
+  $("app").innerHTML=head+`<div class="card"><p class="mu">Tukar Koin / Uang / Kekuatan dengan pemain lain. Hanya di Lobby & Chat Public.</p>
+  <p class="mu">Koin: 🪙 <b>${fmt(coins)}</b> · Uang: 💰 <b>${fmt(statsRow?.money||0)}</b> · Pasukan: ⚔️ <b>${fmt(statsRow?.army||0)}</b></p></div>
+
+  <div class="card"><div style="display:flex;justify-content:space-between"><b>🤖 Bot Trade (Gratis)</b>
+  <button class="btn-gray" style="padding:4px 10px" onclick="loadBots()">⟳</button></div>
+  <p class="mu">Minta resource gratis dari bot admin (ada batas harian).</p>
+  <div id="botList"><p class="mu">Memuat bot...</p></div></div>
+
+  <div class="card"><div style="display:flex;justify-content:space-between"><b>👥 Cari Pemain</b>
+  <button class="btn-gray" style="padding:4px 10px" onclick="refreshPlayers()">⟳</button></div>
+  <input id="plSearch" placeholder="🔎 Cari nama / ID / negara" oninput="filterPlayerList()" style="margin-bottom:6px">
+  <p class="mu" id="plCount"></p>
+  <div id="plList" class="mu">Memuat...</div></div>
+
+  <div class="card"><b>Buat Penawaran</b>
+    <label class="mu">Player ID lawan</label>
+    <input id="trTo" placeholder="Pilih pemain di daftar atau ketuk namanya di chat" value="${esc(window._tradeTo?window._tradeTo.id:"")}">
+    <label class="mu">Kamu beri</label>
+    <select id="trGiveType"><option value="coins">🪙 Koin</option><option value="money">💰 Uang</option><option value="army">⚔️ Kekuatan</option></select>
+    <input id="trGiveAmt" type="number" min="1" placeholder="Jumlah yang kamu beri">
+    <label class="mu">Kamu minta</label>
+    <select id="trWantType"><option value="coins">🪙 Koin</option><option value="money">💰 Uang</option><option value="army">⚔️ Kekuatan</option></select>
+    <input id="trWantAmt" type="number" min="1" placeholder="Jumlah yang kamu minta">
+    <button class="btn" onclick="createTrade()">Kirim Penawaran</button>
+  </div>
+  <div class="card"><div style="display:flex;justify-content:space-between"><b>Penawaran masuk</b>
+  <button class="btn-gray" style="padding:4px 10px" onclick="openTrade()">⟳</button></div>
+  <div id="trIn"><p class="mu">Memuat...</p></div></div>
+  <div class="card"><b>Penawaran keluar</b><div id="trOut"><p class="mu">Memuat...</p></div></div>`;
+  loadTrades();refreshPlayers();loadBots();
+}
+function selectTradePlayer(id,name){
+  window._tradeTo={id,name};
+  const inp=$("trTo");if(inp)inp.value=id;
+  toast("Dipilih: "+name);
+}
+const BOT_PREFIX="BOTTRADE|";
+async function loadBots(){
+  const el=$("botList");if(!el)return;
+  try{
+    const list=arr(await api("GET",API_META,KEY_META)).filter(x=>String(x.player_id).startsWith(BOT_PREFIX)||(x.extra&&x.extra.is_bot_trade));
+    const active=list.filter(x=>{const e=x.extra||{};return e.active!==false});
+    if(!active.length){el.innerHTML="<p class='mu'>Belum ada bot. Tunggu admin.</p>";return}
+    el.innerHTML=active.map(b=>{
+      const e=b.extra||{};
+      const label=e.res_type==="coins"?"🪙 Koin":e.res_type==="money"?"💰 Uang":"⚔️ Kekuatan";
+      return `<div class="acc-item">
+        <div><b>${esc(e.name||"Bot")}</b><br>
+        <span class="mu">${label} maks ${fmt(e.max_per_claim||0)}/klaim · ${fmt(e.daily_limit||0)}/hari</span></div>
+        <button class="btn" style="width:auto;margin:0;padding:8px 12px" onclick="claimBot('${b.id}')">Ambil</button>
+      </div>`;
+    }).join("");
+  }catch(e){el.innerHTML="<p class='mu'>Gagal memuat bot</p>"}
+}
+function botClaimKey(botId){return "botclaim_"+botId+"_"+wibDay()}
+async function claimBot(rowId){
+  if(S)return toast("Trade hanya di luar negara");
+  try{
+    const list=arr(await api("GET",API_META,KEY_META));
+    const row=list.find(x=>x.id===rowId);
+    if(!row)return toast("Bot tidak ada");
+    const e=row.extra||{};
+    if(e.active===false)return toast("Bot nonaktif");
+    const maxC=+e.max_per_claim||0;
+    const daily=+e.daily_limit||0;
+    if(maxC<=0)return toast("Bot belum dikonfigurasi");
+    // track local daily claims
+    let used=0;try{used=+ls(botClaimKey(rowId))||0}catch(err){}
+    if(daily>0&&used>=daily)return toast("Batas harian bot ini habis");
+    const give=Math.min(maxC, daily>0?Math.max(0,daily-used):maxC);
+    if(give<=0)return toast("Batas habis");
+    await applyResDelta(uid,+give,e.res_type||"coins");
+    try{ls(botClaimKey(rowId),String(used+give))}catch(err){}
+    toast("🤖 Bot +"+fmt(give)+" "+(e.res_type||"coins"));
+    await loadStats();
+    openTrade();
+  }catch(e){toast("Gagal: "+e.message)}
+}
+
+async function loadTrades(){
+  const elIn=$("trIn"),elOut=$("trOut");
+  try{
+    const list=arr(await api("GET",API_META,KEY_META)).filter(x=>String(x.player_id).startsWith(TRADE_PREFIX)||(x.extra&&x.extra.is_trade));
+    const open=list.filter(x=>{const e=x.extra||{};return e.status==="open"});
+    const incoming=open.filter(x=>(x.extra||{}).to===uid);
+    const outgoing=open.filter(x=>(x.extra||{}).from===uid);
+    if(elIn)elIn.innerHTML=incoming.length?incoming.map(trHtml).join(""):"<p class='mu'>Tidak ada</p>";
+    if(elOut)elOut.innerHTML=outgoing.length?outgoing.map(trHtml).join(""):"<p class='mu'>Tidak ada</p>";
+  }catch(e){
+    if(elIn)elIn.innerHTML="<p class='mu'>Gagal memuat</p>";
+    if(elOut)elOut.innerHTML="";
+  }
+}
+function trHtml(row){
+  const e=row.extra||{};
+  const mine=e.from===uid;
+  const label=(t)=>t==="coins"?"🪙 Koin":t==="money"?"💰 Uang":"⚔️ Kekuatan";
+  return `<div class="acc-item" style="flex-direction:column;align-items:stretch;gap:6px">
+    <div><span class="mu">${mine?"Ke":"Dari"}:</span> <b>${esc(mine?e.to_name||e.to:e.from_name||e.from)}</b></div>
+    <div class="mu">Beri: ${label(e.give_type)} <b>${fmt(e.give_amt)}</b> → Minta: ${label(e.want_type)} <b>${fmt(e.want_amt)}</b></div>
+    <div style="display:flex;gap:6px">
+      ${!mine?`<button class="btn" style="flex:1;margin:0;padding:8px" onclick="acceptTrade('${row.id}')">✅ Terima</button>
+      <button class="btn-red" style="flex:1;margin:0;padding:8px" onclick="rejectTrade('${row.id}')">❌ Tolak</button>`:
+      `<button class="btn-gray" style="flex:1;margin:0;padding:8px" onclick="rejectTrade('${row.id}')">Batalkan</button>`}
+    </div>
+  </div>`;
+}
+function myRes(type){
+  if(type==="coins")return coins||0;
+  if(type==="money")return statsRow?.money||0;
+  if(type==="army")return statsRow?.army||0;
+  return 0;
+}
+async function createTrade(){
+  if(S)return toast("Trade hanya di luar negara");
+  const to=($("trTo").value||"").trim();
+  const giveType=$("trGiveType").value;
+  const wantType=$("trWantType").value;
+  const giveAmt=Math.floor(+$("trGiveAmt").value||0);
+  const wantAmt=Math.floor(+$("trWantAmt").value||0);
+  if(!to||to===uid)return toast("Isi Player ID lawan yang valid");
+  if(giveAmt<1||wantAmt<1)return toast("Jumlah minimal 1");
+  if(myRes(giveType)<giveAmt)return toast("Saldo tidak cukup");
+  const toName=(_playerCache.find(p=>p.id===to)||{}).name||(window._tradeTo&&window._tradeTo.id===to?window._tradeTo.name:to);
+  // lock resources: deduct immediately so tidak double spend
+  try{
+    await applyResDelta(uid,-giveAmt,giveType);
+    const id=genTradeId();
+    await api("POST",API_META,KEY_META,{
+      player_id:TRADE_PREFIX+id,
+      is_admin:false,is_banned:false,is_whitelisted:false,
+      extra:{
+        is_trade:true,trade_id:id,status:"open",
+        from:uid,from_name:ACC?.name||uid,
+        to:to,to_name:toName,
+        give_type:giveType,give_amt:giveAmt,
+        want_type:wantType,want_amt:wantAmt,
+        created_at:new Date().toISOString()
+      }
+    });
+    if(tradeCtx==="chat")sysChat("🤝 "+(ACC?.name||"Pemain")+" mengirim penawaran trade ke "+toName);
+    toast("🤝 Penawaran dikirim");
+    openTrade();
+  }catch(e){toast("Gagal: "+e.message)}
+}
+async function applyResDelta(pid,delta,type){
+  // update stats for player (self uses local statsRow)
+  if(pid===uid){
+    if(type==="coins"){coins=Math.max(0,(coins||0)+delta);await saveCoins();return}
+    if(!statsRow||!statsRow.id)throw new Error("Stats tidak ada");
+    const body={};
+    if(type==="money")body.money=Math.max(0,(statsRow.money||0)+delta);
+    if(type==="army")body.army=Math.max(0,(statsRow.army||0)+delta);
+    await api("PATCH",API_STATS+"?id="+statsRow.id,KEY_STATS,body);
+    if(type==="money")statsRow.money=body.money;
+    if(type==="army")statsRow.army=body.army;
+    return;
+  }
+  // other player
+  const list=arr(await api("GET",API_STATS,KEY_STATS)).filter(x=>x.player_id===pid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+  const row=list[0];
+  if(!row||!row.id)throw new Error("Lawan tidak ditemukan di database");
+  if(type==="coins"){
+    const cur=row.coins!=null?+row.coins:((row.game_stats||{}).coins||0);
+    const nc=Math.max(0,cur+delta);
+    const gs={...(row.game_stats||{}),coins:nc};
+    await api("PATCH",API_STATS+"?id="+row.id,KEY_STATS,{coins:nc,game_stats:gs});
+  }else{
+    const body={};
+    if(type==="money")body.money=Math.max(0,(row.money||0)+delta);
+    if(type==="army")body.army=Math.max(0,(row.army||0)+delta);
+    await api("PATCH",API_STATS+"?id="+row.id,KEY_STATS,body);
+  }
+}
+async function acceptTrade(rowId){
+  if(S)return toast("Trade hanya di Lobby & Chat Public");
+  try{
+    const list=arr(await api("GET",API_META,KEY_META));
+    const row=list.find(x=>x.id===rowId);
+    if(!row)return toast("Tidak ditemukan");
+    const e=row.extra||{};
+    if(e.status!=="open"||e.to!==uid)return toast("Penawaran tidak valid");
+    // cek saldo penerima cukup untuk want
+    if(myRes(e.want_type)<e.want_amt)return toast("Saldomu kurang untuk menukar");
+    // penerima bayar want, terima give
+    await applyResDelta(uid,-e.want_amt,e.want_type);
+    await applyResDelta(uid,+e.give_amt,e.give_type);
+    // pengirim sudah potong give saat create; terima want
+    await applyResDelta(e.from,+e.want_amt,e.want_type);
+    await api("PATCH",API_META+"?id="+rowId,KEY_META,{extra:{...e,status:"done",done_at:new Date().toISOString()}});
+    if(tradeCtx==="chat")sysChat("✅ Trade selesai: "+(e.from_name||e.from)+" ⇄ "+(ACC?.name||"Pemain"));
+    toast("✅ Trade berhasil");
+    await loadStats();
+    openTrade();
+  }catch(e){toast("Gagal: "+e.message)}
+}
+async function rejectTrade(rowId){
+  try{
+    const list=arr(await api("GET",API_META,KEY_META));
+    const row=list.find(x=>x.id===rowId);
+    if(!row)return toast("Tidak ditemukan");
+    const e=row.extra||{};
+    // refund give ke pengirim jika masih open
+    if(e.status==="open"&&e.from){
+      try{await applyResDelta(e.from,+e.give_amt,e.give_type)}catch(err){}
+    }
+    await api("PATCH",API_META+"?id="+rowId,KEY_META,{extra:{...e,status:"cancelled",cancelled_at:new Date().toISOString()}});
+    toast("Penawaran dibatalkan");
+    if(e.from===uid||e.to===uid)await loadStats();
+    openTrade();
+  }catch(e){toast("Gagal: "+e.message)}
+}
+
 const NORMAL_QUESTS=[
 {q:"5 + 7 = ?",a:"12",reward:15},{q:"12 × 3 = ?",a:"36",reward:20},{q:"Ibukota Indonesia?",a:"jakarta",reward:25},
 {q:"Tahun proklamasi RI?",a:"1945",reward:25},{q:"100 - 37 = ?",a:"63",reward:15},{q:"Benua terbesar?",a:"asia",reward:20},
@@ -150,6 +560,31 @@ function toast(t){const e=$("toast");e.textContent=t;e.className="s";clearTimeou
 function fmt(n){n=Math.floor(+n||0);if(n>=1e12)return(n/1e12).toFixed(1)+" T";if(n>=1e9)return(n/1e9).toFixed(1)+" M";if(n>=1e6)return(n/1e6).toFixed(1)+" Jt";if(n>=1e3)return(n/1e3).toFixed(1)+" Rb";return""+n}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){}}
+
+/* ===== MULTI AKUN (maks 5) ===== */
+const MAX_ACC=5;
+function loadAccounts(){try{return JSON.parse(ls("negara_accounts")||"[]")}catch(e){return[]}}
+function saveAccounts(list){ls("negara_accounts",JSON.stringify(list.slice(0,MAX_ACC)))}
+function currentAccSlot(){return ls("negara_uid")}
+function upsertAccount(uid,name){
+  let list=loadAccounts().filter(a=>a.uid!==uid);
+  list.unshift({uid,name,last:Date.now()});
+  // keep max 5 unique
+  const seen=new Set();const out=[];
+  for(const a of list){if(seen.has(a.uid))continue;seen.add(a.uid);out.push(a);if(out.length>=MAX_ACC)break}
+  saveAccounts(out);
+}
+function removeAccount(uid){
+  saveAccounts(loadAccounts().filter(a=>a.uid!==uid));
+}
+function logoutAccount(){
+  clearInterval(timer);clearInterval(pollTimer);clearInterval(banTimer);clearInterval(chatTimer);
+  if(S)try{cloudSave()}catch(e){}
+  S=null;onlinePlayers=[];metaRow=null;statsRow=null;ACC=null;uid=null;
+  ls("negara_uid",null);ls("negara_name",null);
+  accountScreen();
+}
+
 function getRank(score){score=+score||0;if(score>=100000)return"The Anomali";if(score>=80000)return"Celestial";if(score>=60000)return"Mythic Emperor";if(score>=45000)return"Grandmaster";if(score>=35000)return"Legend";if(score>=25000)return"Champion";if(score>=18000)return"Elite";if(score>=12000)return"Master";if(score>=8000)return"Expert";if(score>=5000)return"Veteran";if(score>=3000)return"Warrior";if(score>=1500)return"Fighter";if(score>=800)return"Skilled";if(score>=400)return"Trained";if(score>=200)return"Adept";if(score>=100)return"Super Pro";if(score>=88)return"Pro";if(score>=55)return"Jagoan";if(score>=25)return"Jago";if(score>=12)return"Lumayan";return"Pemula"}
 function rankScore(){if(!S)return(statsRow?(statsRow.level||1)*100+(statsRow.exp||0):0);return(S.lvl||1)*100+(S.xp||0)+Math.floor((S.land||1)*2)+(S.win_streak||0)*5}
 function getWheel(){try{return JSON.parse(ls("negara_wheel")||"{}")}catch(e){return{}}}
@@ -208,11 +643,38 @@ function resetAiProgress(){
 function pick(i,pub){
   if(pub&&window._taken&&window._taken[CS[i].n]){toast("Negara dipakai "+window._taken[CS[i].n]);return}
   const c=CS[i];const ter=[];for(let k=0;k<64;k++){const r=Math.random();ter.push(r<.1?1:r<.28?2:0)}
+  // Uang & Kekuatan SELALU mulai dari statistik negara (reset tiap pilih/ganti negara)
+  // Level & Exp tetap dari akun; hadiah (gacha/keranjang) masuk setelah ini
   S={c:i,m:c.m,food:100,pop:c.p,army:c.a,t:Array(64).fill(""),lv:Array(64).fill(1),ter,day:1,land:1,sel:"h",xp:0,lvl:1,en:rndEn(i),win_streak:0,mode:pub?"pub":"self",sid:pub||null,rc:{},aiFarm:!!pub};
-  if(statsRow){S.m=statsRow.money||S.m;S.army=statsRow.army||S.army;S.lvl=statsRow.level||1;S.xp=statsRow.exp||0}
-  tab="b";applyWheelPrize();applyCartOnce();start();
+  if(statsRow){S.lvl=statsRow.level||1;S.xp=statsRow.exp||0}
+  // JANGAN ambil money/army dari cloud — selalu fresh per negara
+  tab="b";
+  applyWheelPrize();
+  applyCartOnce();
+  applyPendingGifts();
+  start();
   if(S.mode==="pub"){cloudSave();loadOnlinePlayers()}
+  toast(c.f+" "+c.n+" · mulai dari awal (uang & kekuatan negara)");
 }
+async function applyPendingGifts(){
+  // Hadiah admin: pending_money / pending_army di game_stats — masuk 1x lalu dikosongkan
+  if(!S||!statsRow)return;
+  const gs=statsRow.game_stats||{};
+  const pm=+gs.pending_money||0;
+  const pa=+gs.pending_army||0;
+  if(!pm&&!pa)return;
+  S.m+=(pm||0);
+  S.army+=(pa||0);
+  const ngs={...gs,pending_money:0,pending_army:0};
+  try{
+    if(statsRow.id){
+      await api("PATCH",API_STATS+"?id="+statsRow.id,KEY_STATS,{game_stats:ngs});
+      statsRow.game_stats=ngs;
+    }
+  }catch(e){}
+  setTimeout(()=>toast("🎁 Hadiah admin: +"+fmt(pm)+" uang, +"+fmt(pa)+" kekuatan"),1000);
+}
+
 function rndEn(i){const ix=CS.map((_,k)=>k).filter(k=>k!==i);for(let k=ix.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[ix[k],ix[j]]=[ix[j],ix[k]]}return ix.slice(0,5).map((c,j)=>({n:CS[c].n,f:CS[c].f,pw:20+Math.floor(Math.random()*20)+j*12}))}
 function growMap(n){if(!S)return;for(let k=0;k<n;k++){const r=Math.random();S.t.push("");S.lv.push(1);S.ter.push(r<.1?1:r<.28?2:0)}}
 function shrinkMap(n){if(!S)return;n=n||1;for(let k=0;k<n;k++){if(S.t.length>16){S.t.pop();S.lv.pop();S.ter.pop()}}}
@@ -298,7 +760,7 @@ function render(){
   const g=$("grid");if(g)g.onclick=e=>{const el=e.target.closest("[data-i]");if(el)build(+el.dataset.i)};
 }
 function start(){clearInterval(timer);clearInterval(pollTimer);render();timer=setInterval(tick,1500);if(S&&S.mode==="pub")pollTimer=setInterval(async()=>{await loadOnlinePlayers();if(tab==="w")render()},8000)}
-function menu(){clearInterval(timer);clearInterval(pollTimer);if(S)cloudSave();S=null;currentServer=null;onlinePlayers=[];lobby()}
+function menu(){clearInterval(timer);clearInterval(pollTimer);clearInterval(chatTimer);if(S)cloudSave();S=null;currentServer=null;onlinePlayers=[];lobby()}
 
 async function addToCart(type,amount){amount=+amount||0;if(amount<1e6||amount>1e14)return toast("1 Jt – 100 T");const cost=type==="money"?costMoney(amount):costArmy(amount);if(coins<cost)return toast("Koin kurang");coins-=cost;const c=getCart();if(type==="money")c.money=(c.money||0)+amount;else c.army=(c.army||0)+amount;setCart(c);await saveCoins();toast("🛒 +"+packLabel(amount));openCoinShop()}
 function clearCart(){setCart({});toast("Keranjang kosong");openCoinShop()}
@@ -335,23 +797,29 @@ async function requestReview(){if(!metaRow||!canReview(metaRow))return toast("Ti
   try{for(const r of metaRows){if(!r.is_banned||!r.id)continue;const ex=r.extra||{};const ne={...ex,review_for:banKey(ex),review_until:until,review_requested_at:nowIso};await api("PATCH",API_META+"?id="+r.id,KEY_META,{extra:ne});r.extra=ne}toast("🔍 Tunggu 3 menit")}catch(e){toast("Gagal")}showBan()}
 
 async function lobby(){
+  clearInterval(chatTimer);
   $("app").innerHTML=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Lobby</p></div><div class="card"><p class="mu">Memuat...</p></div>`;
   await ensureMeta();if(isBanned()){showBan();return}await ensureStats(ACC?.name);
   const name=ACC?.name||"Pemain";const lvl=statsRow?.level||1;const exp=statsRow?.exp||0;
   $("app").innerHTML=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Lobby</p></div>
-  <div class="card"><div style="display:flex;justify-content:space-between"><span>👤 <b>${esc(name)}</b></span><span class="rank">Lv ${lvl} · ${getRank((lvl||1)*100+exp)}</span></div>
-  <p class="mu" style="margin-top:6px">ID: ${uid}</p><p style="margin-top:10px;font-size:22px;font-weight:800">🪙 ${coins} <span class="mu" style="font-size:13px">Koin</span></p></div>
-  <button class="btn-blue" onclick="serverScreen()">🌐 Server Public (PvP)</button>
+  <div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><span>👤 <b>${esc(name)}</b></span><span class="rank">Lv ${lvl} · ${getRank((lvl||1)*100+exp)}</span></div>
+  <p class="mu" style="margin-top:6px">ID: ${uid}</p>
+  <p style="margin-top:10px;font-size:22px;font-weight:800">🪙 ${coins} <span class="mu" style="font-size:13px">Koin</span></p>
+  <button class="btn-gray" style="width:100%;margin-top:10px" onclick="logoutAccount()">🚪 Logout / Ganti Akun</button></div>
+  <button class="btn-blue" onclick="serverScreen()">⚔️ Server PVP (Duel Negara)</button>
+  <button class="btn-blue" style="margin-top:8px" onclick="openChat('chat')">💬 Chat Public (Ngobrol · Pemain · Trade)</button>
   <button class="btn" onclick="countryScreen(false)">🤖 Main Self</button>
   <div style="display:flex;gap:8px;margin-top:8px">
     <button class="btn" style="flex:1;margin:0;background:linear-gradient(135deg,#f59f00,#e8590c)" onclick="openGacha()">🎡 Gacha</button>
     <button class="btn-blue" style="flex:1;margin:0" onclick="openQuest()">❓ Quest</button></div>
   <button class="btn" style="margin-top:8px" onclick="openCoinShop()">🛒 Toko Koin / Keranjang</button>
-  <p class="mu" style="margin-top:12px;text-align:center">${CS.length} negara · Konfirmasi bangun · Refund 85%</p>`;
+  <button class="btn-blue" style="margin-top:8px" onclick="openTrade('lobby')">🤝 Trade</button>
+  <p class="mu" style="margin-top:12px;text-align:center">${CS.length} negara · Uang & kekuatan reset tiap pilih negara · Trade hanya di Lobby & Chat Public</p>`;
 }
 async function serverScreen(){
-  $("app").innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between"><b>🌐 Server</b><button class="btn-gray" style="padding:4px 10px" onclick="lobby()">←</button></div>
-  <p class="mu">Negara eksklusif · maks ${CS.length}</p></div>
+  clearInterval(chatTimer);
+  $("app").innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between"><b>🌐 Server PVP</b><button class="btn-gray" style="padding:4px 10px" onclick="lobby()">←</button></div>
+  <p class="mu">Duel negara (PVP) · maks ${CS.length} pemain</p></div>
   <div class="card"><b>Gabung Kode</b><input id="sid" placeholder="S-XXXX" style="text-transform:uppercase"><button class="btn" onclick="joinByCode()">Gabung</button></div>
   <div class="card"><div style="display:flex;justify-content:space-between"><b>Aktif</b><button class="btn-gray" style="padding:4px 10px" onclick="serverScreen()">⟳</button></div><div id="sl"><p class="mu">Memuat...</p></div></div>`;
   const servers=await listServers();const el=$("sl");
@@ -423,13 +891,74 @@ async function submitQuest(){const cq=window._cq;if(!cq)return;const ans=($("qan
   if(ans===String(cq.a).toLowerCase()){coins+=(cq.reward||10);await saveCoins();claimedQuests[cq.id]=1;ls("negara_qclaim",JSON.stringify(claimedQuests));toast("🎉 +"+cq.reward+" koin")}else toast("❌ Salah");
   setTimeout(openQuest,900)}
 
-function nameScreen(){$("app").innerHTML=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Masuk</p></div>
-  <div class="card"><b>Nama</b><input id="nm" maxlength="14" placeholder="3-14 karakter"><button class="btn" onclick="saveName()">Mulai</button></div>`}
-async function saveName(){const u=$("nm").value.trim();if(!/^[A-Za-z0-9_ ]{3,14}$/.test(u))return toast("Nama 3-14 karakter");
-  uid=ls("negara_uid");if(!uid){uid="u"+Math.random().toString(36).slice(2,10)+Date.now().toString(36);ls("negara_uid",uid)}
-  ls("negara_name",u);ACC={name:u,id:uid};await ensureMeta();if(isBanned()){showBan();return}await ensureStats(u);toast("Halo, "+u+"!");lobby()}
-(async function boot(){uid=ls("negara_uid");const name=ls("negara_name");
-  if(uid&&name){ACC={name,id:uid};await ensureMeta();if(isBanned()){showBan();return}await ensureStats(name);lobby()}else nameScreen()})();
+function nameScreen(){accountScreen()}
+async function saveName(){
+  const u=$("nm").value.trim();
+  if(!/^[A-Za-z0-9_ ]{3,14}$/.test(u))return toast("Nama 3-14 karakter");
+  // akun baru?
+  let isNew=!ls("negara_uid");
+  if(isNew){
+    const list=loadAccounts();
+    if(list.length>=MAX_ACC)return toast("Maksimal "+MAX_ACC+" akun. Hapus salah satu dulu.");
+    uid="u"+Math.random().toString(36).slice(2,10)+Date.now().toString(36);
+    ls("negara_uid",uid);
+  }else{
+    uid=ls("negara_uid");
+  }
+  ls("negara_name",u);ACC={name:u,id:uid};
+  upsertAccount(uid,u);
+  await ensureMeta();if(isBanned()){showBan();return}
+  await ensureStats(u);toast("Halo, "+u+"!");lobby();
+}
+function switchToAccount(targetUid,name){
+  clearInterval(timer);clearInterval(pollTimer);clearInterval(banTimer);clearInterval(chatTimer);
+  S=null;onlinePlayers=[];metaRow=null;statsRow=null;
+  uid=targetUid;ls("negara_uid",targetUid);ls("negara_name",name);
+  ACC={name,id:targetUid};upsertAccount(targetUid,name);
+  (async()=>{await ensureMeta();if(isBanned()){showBan();return}await ensureStats(name);toast("Masuk: "+name);lobby()})();
+}
+function accountScreen(){
+  const list=loadAccounts();
+  let h=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Pilih Akun · Maks ${MAX_ACC}</p></div>
+  <div class="card"><b>Akun tersimpan (${list.length}/${MAX_ACC})</b>`;
+  if(!list.length)h+=`<p class="mu" style="margin-top:8px">Belum ada akun.</p>`;
+  else h+=list.map(a=>`<div class="acc-item">
+      <div><b>${esc(a.name)}</b><br><span class="mu">${esc(a.uid)}</span></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn" style="width:auto;margin:0;padding:8px 12px" onclick="switchToAccount('${esc(a.uid)}','${esc(a.name)}')">Masuk</button>
+        <button class="btn-red" style="width:auto;margin:0;padding:8px 10px" onclick="deleteAccPrompt('${esc(a.uid)}','${esc(a.name)}')">Hapus</button>
+      </div></div>`).join("");
+  h+=`</div>`;
+  if(list.length<MAX_ACC){
+    h+=`<div class="card"><b>Buat Akun Baru</b>
+      <input id="nm" maxlength="14" placeholder="Nama 3-14 karakter">
+      <button class="btn" onclick="createNewAccount()">➕ Buat Akun</button>
+      <p class="mu">Sisa slot: ${MAX_ACC-list.length}</p></div>`;
+  }else{
+    h+=`<div class="card"><p class="mu">Slot penuh (${MAX_ACC}/${MAX_ACC}). Hapus akun lama untuk membuat baru.</p></div>`;
+  }
+  $("app").innerHTML=h;
+}
+function createNewAccount(){
+  // clear current session keys so saveName creates new uid
+  ls("negara_uid",null);ls("negara_name",null);uid=null;ACC=null;
+  saveName();
+}
+function deleteAccPrompt(id,name){
+  if(!confirm("Hapus akun \""+name+"\" dari perangkat ini?\nData cloud tidak otomatis terhapus."))return;
+  removeAccount(id);
+  if(ls("negara_uid")===id){ls("negara_uid",null);ls("negara_name",null)}
+  toast("Akun dihapus dari daftar");accountScreen();
+}
+
+(async function boot(){
+  uid=ls("negara_uid");const name=ls("negara_name");
+  if(uid&&name){
+    ACC={name,id:uid};upsertAccount(uid,name);
+    await ensureMeta();if(isBanned()){showBan();return}
+    await ensureStats(name);lobby();
+  }else accountScreen();
+})();
 </script>
 </body>
 </html>
