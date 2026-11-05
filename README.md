@@ -82,16 +82,25 @@ const CHAT_MAX=200,CHAT_SHOW=80,CHAT_ROOM="PUBLIK";
 const SRV_PREFIX="SERVER|",QUEST_PREFIX="QUEST|";
 const DAY_MS=24*3600*1000;
 /* ===== ANTI-CHEAT ===== */
-const MAX_COINS=5e8;      // 500 juta koin maks wajar
-const MAX_MONEY=1e15;     // batas uang sesi/cloud
-const MAX_ARMY=1e12;      // batas kekuatan
-const CHEAT_COIN_FLAG=1e12; // di atas ini = pasti cheat
+const MAX_COINS=5e8;      // 500 juta koin maks (non-admin)
+const MAX_MONEY=1e18;     // uang sangat besar masih sah (admin gift)
+const MAX_ARMY=1e18;
+const CHEAT_COIN_FLAG=1e12; // koin >= 1T = pasti cheat
+function isAdminAcc(){return!!(metaRow&&metaRow.is_admin)}
 function clampNum(n,max){n=+n||0;if(!isFinite(n)||n<0)return 0;return Math.min(Math.floor(n),max)}
-function isCheatCoins(v){return (+v||0)>=CHEAT_COIN_FLAG||(+v||0)>MAX_COINS*2}
-function sanitizeCoins(v){return clampNum(v,MAX_COINS)}
-function sanitizeMoney(v){return clampNum(v,MAX_MONEY)}
-function sanitizeArmy(v){return clampNum(v,MAX_ARMY)}
+function isCheatCoins(v){return(+v||0)>=CHEAT_COIN_FLAG}
+function sanitizeCoins(v){if(isAdminAcc())return Math.max(0,Math.floor(+v||0));return clampNum(v,MAX_COINS)}
+function sanitizeMoney(v){if(isAdminAcc())return Math.max(0,Math.floor(+v||0));return clampNum(v,MAX_MONEY)}
+function sanitizeArmy(v){if(isAdminAcc())return Math.max(0,Math.floor(+v||0));return clampNum(v,MAX_ARMY)}
+function maxTradeAmt(type){
+  if(isAdminAcc())return 1e18;
+  if(type==="coins")return MAX_COINS;
+  if(type==="money")return MAX_MONEY;
+  if(type==="army")return MAX_ARMY;
+  return MAX_COINS;
+}
 async function flagCheater(reason){
+  if(isAdminAcc())return; // admin tidak di-flag
   try{
     if(!uid||!metaRow||!metaRow.id)return;
     const ex={...(metaRow.extra||{}),cheat_flag:true,cheat_reason:reason,cheat_at:new Date().toISOString()};
@@ -100,10 +109,10 @@ async function flagCheater(reason){
   }catch(e){}
 }
 async function enforceAntiCheat(src){
-  // panggil setelah loadStats / sebelum save
+  if(isAdminAcc())return false; // admin bypass total
   let dirty=false,reason="";
   const rawCoins=statsRow?(statsRow.coins!=null?+statsRow.coins:((statsRow.game_stats||{}).coins||0)):coins;
-  if(isCheatCoins(rawCoins)||isCheatCoins(coins)){
+  if(isCheatCoins(rawCoins)||(+rawCoins)>MAX_COINS*2||isCheatCoins(coins)){
     reason="coins="+rawCoins;
     coins=sanitizeCoins(Math.min(rawCoins,MAX_COINS));
     dirty=true;
@@ -111,8 +120,9 @@ async function enforceAntiCheat(src){
     coins=sanitizeCoins(coins);
   }
   if(statsRow){
-    if(isCheatCoins(statsRow.money)||(+statsRow.money||0)>MAX_MONEY){statsRow.money=sanitizeMoney(statsRow.money);dirty=true;reason+=(reason?",":"")+"money"}
-    if(isCheatCoins(statsRow.army)||(+statsRow.army||0)>MAX_ARMY){statsRow.army=sanitizeArmy(statsRow.army);dirty=true;reason+=(reason?",":"")+"army"}
+    // JANGAN pakai isCheatCoins untuk money/army
+    if((+statsRow.money||0)>MAX_MONEY){statsRow.money=sanitizeMoney(statsRow.money);dirty=true;reason+=(reason?",":"")+"money"}
+    if((+statsRow.army||0)>MAX_ARMY){statsRow.army=sanitizeArmy(statsRow.army);dirty=true;reason+=(reason?",":"")+"army"}
   }
   if(S){
     if((+S.m||0)>MAX_MONEY){S.m=sanitizeMoney(S.m);dirty=true}
@@ -131,9 +141,6 @@ async function enforceAntiCheat(src){
   }
   return dirty;
 }
-
-const ADMIN_PHONE="0858-8238-2854",ADMIN_WA="6285882382854";
-const REVIEW_MAX_DAYS=14,REVIEW_MS=3*60*1000;
 
 const CORE=[
 ["Indonesia","🇮🇩",600,30,40],["Jepang","🇯🇵",900,25,30],["Amerika Serikat","🇺🇸",800,60,40],["Rusia","🇷🇺",500,70,30],
@@ -568,7 +575,7 @@ async function createTrade(){if(isInvestigation())return toast("⚠️ Akun inve
   const wantAmt=Math.floor(+$("trWantAmt").value||0);
   if(!to||to===uid)return toast("Isi Player ID lawan yang valid");
   if(giveAmt<1||wantAmt<1)return toast("Jumlah minimal 1");
-  if(giveAmt>MAX_COINS||wantAmt>MAX_COINS)return toast("🛡️ Jumlah terlalu besar (anti-cheat)");
+  if(giveAmt>maxTradeAmt(giveType)||wantAmt>maxTradeAmt(wantType))return toast("🛡️ Jumlah terlalu besar (anti-cheat)");
   if(myRes(giveType)<giveAmt)return toast("Saldo tidak cukup");
   // lock resources: deduct immediately so tidak double spend
   try{
@@ -593,7 +600,7 @@ async function createTrade(){if(isInvestigation())return toast("⚠️ Akun inve
 async function applyResDelta(pid,delta,type){
   // update stats for player (self uses local statsRow)
   if(pid===uid){
-    if(type==="coins"){coins=sanitizeCoins(Math.max(0,(coins||0)+delta));if(isCheatCoins(coins)){coins=sanitizeCoins(coins);await flagCheater("trade coins")}await saveCoins();return}
+    if(type==="coins"){coins=Math.max(0,(coins||0)+delta);if(!isAdminAcc()){if(isCheatCoins(coins)||coins>MAX_COINS){coins=sanitizeCoins(coins);await flagCheater("trade coins")}}else{coins=Math.floor(coins)}await saveCoins();return}
     if(!statsRow||!statsRow.id)throw new Error("Stats tidak ada");
     const body={};
     if(type==="money")body.money=Math.max(0,(statsRow.money||0)+delta);
@@ -725,7 +732,7 @@ async function loadMeta(){
     rows.sort((a,b)=>{if(!!a.is_banned!==!!b.is_banned)return(b.is_banned?1:0)-(a.is_banned?1:0);return new Date(b.created_at||0)-new Date(a.created_at||0)});
     metaRows=rows;metaRow=rows[0]||null;return metaRow}catch(e){metaRow=null;metaRows=[];return null}
 }
-async function loadStats(){try{const list=arr(await api("GET",API_STATS,KEY_STATS));const m=list.filter(x=>x.player_id===uid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));statsRow=m[0]||null;if(statsRow){let c=statsRow.coins!=null?+statsRow.coins:((statsRow.game_stats||{}).coins||0);coins=sanitizeCoins(c);if(isCheatCoins(c)){coins=sanitizeCoins(c);try{const gs={...(statsRow.game_stats||{}),coins};await api("PATCH",API_STATS+"?id="+statsRow.id,KEY_STATS,{coins,game_stats:gs});statsRow.coins=coins;statsRow.game_stats=gs;await flagCheater("load coins="+c)}catch(e){}}try{claimedQuests=JSON.parse(ls("negara_qclaim")||"{}")}catch(e){claimedQuests={}}}return statsRow}catch(e){statsRow=null;return null}}
+async function loadStats(){try{const list=arr(await api("GET",API_STATS,KEY_STATS));const m=list.filter(x=>x.player_id===uid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));statsRow=m[0]||null;if(statsRow){let c=statsRow.coins!=null?+statsRow.coins:((statsRow.game_stats||{}).coins||0);if(isAdminAcc()){coins=Math.max(0,Math.floor(c))}else{coins=sanitizeCoins(c);if(isCheatCoins(c)||c>MAX_COINS*2){coins=sanitizeCoins(c);try{const gs={...(statsRow.game_stats||{}),coins};await api("PATCH",API_STATS+"?id="+statsRow.id,KEY_STATS,{coins,game_stats:gs});statsRow.coins=coins;statsRow.game_stats=gs;await flagCheater("load coins="+c)}catch(e){}}}try{claimedQuests=JSON.parse(ls("negara_qclaim")||"{}")}catch(e){claimedQuests={}}}return statsRow}catch(e){statsRow=null;return null}}
 async function ensureMeta(){await loadMeta();if(!metaRow){try{metaRow=await api("POST",API_META,KEY_META,{player_id:uid,is_admin:false,is_banned:false,is_whitelisted:false,extra:{}});if(metaRow)metaRows=[metaRow]}catch(e){}}}
 async function ensureStats(name){await loadStats();if(!statsRow){try{statsRow=await api("POST",API_STATS,KEY_STATS,{player_id:uid,level:1,exp:0,money:500,army:20,coins:50,game_stats:{name:name||"Pemain",rank:"Pemula",win_streak:0,coins:50}});coins=50}catch(e){}}}
 function isBanned(){return!!(metaRow&&metaRow.is_banned)}
