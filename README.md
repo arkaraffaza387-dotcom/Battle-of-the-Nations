@@ -86,7 +86,13 @@ const MAX_COINS=5e8;      // 500 juta koin maks (non-admin)
 const MAX_MONEY=1e18;     // uang sangat besar masih sah (admin gift)
 const MAX_ARMY=1e18;
 const CHEAT_COIN_FLAG=1e12; // koin >= 1T = pasti cheat
-function isAdminAcc(){return!!(metaRow&&metaRow.is_admin)}
+function isAdminAcc(){
+  if(metaRow&&(metaRow.is_admin||(metaRow.extra&&metaRow.extra.admin_on)))return true;
+  if(typeof metaRows!=='undefined'&&metaRows&&metaRows.length){
+    for(const r of metaRows){if(r&&(r.is_admin||(r.extra&&r.extra.admin_on)))return true}
+  }
+  return false;
+}
 function clampNum(n,max){n=+n||0;if(!isFinite(n)||n<0)return 0;return Math.min(Math.floor(n),max)}
 function isCheatCoins(v){return(+v||0)>=CHEAT_COIN_FLAG}
 function sanitizeCoins(v){if(isAdminAcc())return Math.max(0,Math.floor(+v||0));return clampNum(v,MAX_COINS)}
@@ -729,17 +735,17 @@ function fmtLeft(ms){if(ms<=0)return"0 detik";const s=Math.floor(ms/1000);const 
 async function loadMeta(){
   try{const list=arr(await api("GET",API_META,KEY_META));const rows=list.filter(x=>x.player_id===uid);
     for(const r of rows){if(!r.id)continue;if(banExpired(r)||reviewDone(r)){const by=reviewDone(r)&&!banExpired(r)?"auto-review":"auto";const ne=clearedExtra(r.extra,by);try{await api("PATCH",API_META+"?id="+r.id,KEY_META,{is_banned:false,extra:ne});r.is_banned=false;r.extra=ne}catch(e){}}}
-    rows.sort((a,b)=>{if(!!a.is_banned!==!!b.is_banned)return(b.is_banned?1:0)-(a.is_banned?1:0);return new Date(b.created_at||0)-new Date(a.created_at||0)});
+    rows.sort((a,b)=>{if(!!a.is_banned!==!!b.is_banned)return(b.is_banned?1:0)-(a.is_banned?1:0);if(!!a.is_admin!==!!b.is_admin)return(b.is_admin?1:0)-(a.is_admin?1:0);return new Date(b.created_at||0)-new Date(a.created_at||0)});
     metaRows=rows;metaRow=rows[0]||null;return metaRow}catch(e){metaRow=null;metaRows=[];return null}
 }
-async function loadStats(){try{const list=arr(await api("GET",API_STATS,KEY_STATS));const m=list.filter(x=>x.player_id===uid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));statsRow=m[0]||null;if(statsRow){let c=statsRow.coins!=null?+statsRow.coins:((statsRow.game_stats||{}).coins||0);if(isAdminAcc()){coins=Math.max(0,Math.floor(c))}else{coins=sanitizeCoins(c);if(isCheatCoins(c)||c>MAX_COINS*2){coins=sanitizeCoins(c);try{const gs={...(statsRow.game_stats||{}),coins};await api("PATCH",API_STATS+"?id="+statsRow.id,KEY_STATS,{coins,game_stats:gs});statsRow.coins=coins;statsRow.game_stats=gs;await flagCheater("load coins="+c)}catch(e){}}}try{claimedQuests=JSON.parse(ls("negara_qclaim")||"{}")}catch(e){claimedQuests={}}}return statsRow}catch(e){statsRow=null;return null}}
+async function loadStats(){try{const list=arr(await api("GET",API_STATS,KEY_STATS));const m=list.filter(x=>x.player_id===uid).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));statsRow=m[0]||null;if(statsRow){let c=statsRow.coins!=null?+statsRow.coins:((statsRow.game_stats||{}).coins||0);if(isAdminAcc()){coins=Math.max(0,Math.floor(+c||0))}else{if(isCheatCoins(c)||c>MAX_COINS*2){coins=sanitizeCoins(c);try{const gs={...(statsRow.game_stats||{}),coins};await api("PATCH",API_STATS+"?id="+statsRow.id,KEY_STATS,{coins,game_stats:gs});statsRow.coins=coins;statsRow.game_stats=gs;await flagCheater("load coins="+c)}catch(e){}}else{coins=sanitizeCoins(c)}}try{claimedQuests=JSON.parse(ls("negara_qclaim")||"{}")}catch(e){claimedQuests={}}}return statsRow}catch(e){statsRow=null;return null}}
 async function ensureMeta(){await loadMeta();if(!metaRow){try{metaRow=await api("POST",API_META,KEY_META,{player_id:uid,is_admin:false,is_banned:false,is_whitelisted:false,extra:{}});if(metaRow)metaRows=[metaRow]}catch(e){}}}
 async function ensureStats(name){await loadStats();if(!statsRow){try{statsRow=await api("POST",API_STATS,KEY_STATS,{player_id:uid,level:1,exp:0,money:500,army:20,coins:50,game_stats:{name:name||"Pemain",rank:"Pemula",win_streak:0,coins:50}});coins=50}catch(e){}}}
 function isBanned(){return!!(metaRow&&metaRow.is_banned)}
 function isInvestigation(m){const row=m||metaRow;const ex=(row&&row.extra)||{};return!!ex.investigation&&!row.is_banned}
 function investigationOf(m){const ex=(m&&m.extra)||{};return!!ex.investigation}
 
-async function saveCoins(){if(!statsRow||!statsRow.id)return;coins=sanitizeCoins(coins);try{const gs={...(statsRow.game_stats||{}),coins};await api("PATCH",API_STATS+"?id="+statsRow.id,KEY_STATS,{coins,game_stats:gs});statsRow.coins=coins;statsRow.game_stats=gs}catch(e){}}
+async function saveCoins(){if(!statsRow||!statsRow.id)return;if(!isAdminAcc())coins=sanitizeCoins(coins);else coins=Math.max(0,Math.floor(+coins||0));try{const gs={...(statsRow.game_stats||{}),coins};await api("PATCH",API_STATS+"?id="+statsRow.id,KEY_STATS,{coins,game_stats:gs});statsRow.coins=coins;statsRow.game_stats=gs}catch(e){}}
 
 async function listServers(){try{const list=arr(await api("GET",API_META,KEY_META));return list.filter(x=>String(x.player_id).startsWith(SRV_PREFIX)||(x.extra&&x.extra.is_server)).map(s=>{const ex=s.extra||{};return{id:s.id,code:ex.server_code||String(s.player_id).replace(SRV_PREFIX,""),type:ex.server_type||"free",active:ex.server_is_active!==false,expires:ex.server_expires_at?new Date(ex.server_expires_at):null,minLevel:ex.server_min_level||1}}).filter(s=>s.active&&(!s.expires||s.expires>new Date()))}catch(e){return[]}}
 
@@ -920,7 +926,7 @@ async function requestReview(){if(!metaRow||!canReview(metaRow))return toast("Ti
 
 async function lobby(){
   $("app").innerHTML=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Lobby</p></div><div class="card"><p class="mu">Memuat...</p></div>`;
-  await ensureMeta();if(isBanned()){showBan();return}await ensureStats(ACC?.name);await enforceAntiCheat("lobby");
+  await ensureMeta();if(isBanned()){showBan();return}await ensureStats(ACC?.name);await enforceAntiCheat("lobby");if(isAdminAcc()&&statsRow){const c=statsRow.coins!=null?+statsRow.coins:((statsRow.game_stats||{}).coins||0);coins=Math.max(0,Math.floor(c||0));}
   const name=ACC?.name||"Pemain";const lvl=statsRow?.level||1;const exp=statsRow?.exp||0;
   $("app").innerHTML=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Lobby</p></div>
   <div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><span>👤 <b>${esc(name)}</b></span><span class="rank">Lv ${lvl} · ${getRank((lvl||1)*100+exp)}</span></div>
@@ -930,13 +936,15 @@ async function lobby(){
   ${isInvestigation()?`<p style="margin-top:10px;padding:8px;background:rgba(245,159,0,.15);border-radius:10px;color:#f59f00;font-size:13px">⚠️ <b>Status Investigasi</b> — Bisa main, <b>tidak bisa Trade</b>. Chat bertanda peringatan sampai Unban penuh.</p>`:""}
   </div>
   <button class="btn-blue" onclick="serverScreen()">🌐 Server Public (PvP)</button>
+  <button class="btn-blue" style="margin-top:8px" onclick="openChat('chat')">💬 Chat Public</button>
   <button class="btn" onclick="countryScreen(false)">🤖 Main Self</button>
   <div style="display:flex;gap:8px;margin-top:8px">
     <button class="btn" style="flex:1;margin:0;background:linear-gradient(135deg,#f59f00,#e8590c)" onclick="openGacha()">🎡 Gacha</button>
     <button class="btn-blue" style="flex:1;margin:0" onclick="openQuest()">❓ Quest</button></div>
   <button class="btn" style="margin-top:8px" onclick="openCoinShop()">🛒 Toko Koin / Keranjang</button>
-  <button class="btn-blue" style="margin-top:8px" onclick="openTrade()">🤝 Trade (Lobby)</button>
-  <p class="mu" style="margin-top:12px;text-align:center">${CS.length} negara · Uang & kekuatan reset tiap pilih negara · Trade di Lobby</p>`;
+  <button class="btn-blue" style="margin-top:8px" onclick="openTrade('lobby')">🤝 Trade (Lobby)</button>
+  <button class="btn" style="margin-top:8px" onclick="openProfileCheck()">🔍 Cek Profil</button>
+  <p class="mu" style="margin-top:12px;text-align:center">${CS.length} negara · Chat permanen · Trade di Lobby</p>`;
 }
 async function serverScreen(){
   $("app").innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between"><b>🌐 Server</b><button class="btn-gray" style="padding:4px 10px" onclick="lobby()">←</button></div>
