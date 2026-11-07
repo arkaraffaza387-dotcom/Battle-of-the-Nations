@@ -86,13 +86,42 @@ const MAX_COINS=5e8;      // 500 juta koin maks (non-admin)
 const MAX_MONEY=1e18;     // uang sangat besar masih sah (admin gift)
 const MAX_ARMY=1e18;
 const CHEAT_COIN_FLAG=1e12; // koin >= 1T = pasti cheat
-function isAdminAcc(){
-  if(metaRow&&(metaRow.is_admin||(metaRow.extra&&metaRow.extra.admin_on)))return true;
-  if(typeof metaRows!=='undefined'&&metaRows&&metaRows.length){
-    for(const r of metaRows){if(r&&(r.is_admin||(r.extra&&r.extra.admin_on)))return true}
+function getRole(){
+  // admin > premium > biasa
+  if(metaRow&&(metaRow.is_admin||(metaRow.extra&&(metaRow.extra.admin_on||metaRow.extra.role==='admin'))))return 'admin';
+  if(typeof metaRows!=='undefined'&&metaRows){
+    for(const r of metaRows){
+      if(r&&(r.is_admin||(r.extra&&(r.extra.admin_on||r.extra.role==='admin'))))return 'admin';
+    }
   }
-  return false;
+  const role=(metaRow&&metaRow.extra&&metaRow.extra.role)||'biasa';
+  if(role==='premium'||role==='admin')return role;
+  if(typeof metaRows!=='undefined'&&metaRows){
+    for(const r of metaRows){
+      const rr=(r&&r.extra&&r.extra.role)||'';
+      if(rr==='premium')return 'premium';
+      if(rr==='admin')return 'admin';
+    }
+  }
+  return 'biasa';
 }
+function isAdminAcc(){return getRole()==='admin'}
+function isPremiumAcc(){const r=getRole();return r==='premium'||r==='admin'}
+function roleBadge(role){
+  role=role||'biasa';
+  if(role==='admin')return '<span class="badge no" style="background:linear-gradient(135deg,#d4a017,#ffd700);color:#1a1200">👑 ADMIN</span>';
+  if(role==='premium')return '<span class="badge blue">⭐ PREMIUM</span>';
+  return '<span class="badge">👤 BIASA</span>';
+}
+function roleTitle(role){
+  role=role||getRole();
+  if(role==='admin')return 'Admin';
+  if(role==='premium')return 'Premium';
+  return 'Biasa';
+}
+const PREMIUM_PRICE=500000; // koin untuk upgrade Biasa → Premium
+const PREMIUM_MAX_SERVERS=3;
+
 function clampNum(n,max){n=+n||0;if(!isFinite(n)||n<0)return 0;return Math.min(Math.floor(n),max)}
 function isCheatCoins(v){return(+v||0)>=CHEAT_COIN_FLAG}
 function sanitizeCoins(v){if(isAdminAcc())return Math.max(0,Math.floor(+v||0));return clampNum(v,MAX_COINS)}
@@ -332,10 +361,11 @@ async function loadAllPlayers(){
     const gs=p.game_stats||{};
     const la=gs.last_active?new Date(gs.last_active).getTime():0;
     const meta=metaMap[p.player_id];
+    const role=(meta&&(meta.is_admin||(meta.extra&&meta.extra.role==='admin')))?'admin':(meta&&meta.extra&&meta.extra.role)||'biasa';
     return{id:p.player_id,name:gs.name||p.name||p.player_id,level:p.level||1,exp:p.exp||0,
       country:gs.country||"",server:gs.server||"",online:la>0&&now-la<5*60000,me:p.player_id===uid,
       banned:!!(meta&&meta.is_banned),investigation:!!(meta&&meta.extra&&meta.extra.investigation&&!meta.is_banned),
-      ban_reason:(meta&&meta.extra&&(meta.extra.ban_reason||meta.extra.investigation_reason))||""};
+      ban_reason:(meta&&meta.extra&&(meta.extra.ban_reason||meta.extra.investigation_reason))||"",role:role};
   });
 }
 async function openProfileCheck(){
@@ -389,7 +419,7 @@ async function showProfile(pid){
     let statusBadge=p.banned?`<span class="badge no">🚫 DIBANNED</span>`:p.investigation?`<span class="badge warn">⚠️ INVESTIGASI</span>`:`<span class="badge ok">✅ AKTIF</span>`;
     let onlineBadge=p.online?`<span class="badge ok">🟢 Online</span>`:`<span class="badge">⚪ Offline / tidak aktif</span>`;
     put(`<div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center"><b>👤 ${esc(p.name)}</b>${statusBadge}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><b>👤 ${esc(p.name)}</b> ${roleBadge(p.role||"biasa")} ${statusBadge}</div>
       <p class="mu" style="margin-top:6px">ID: ${esc(p.id)}</p>
       <p style="margin-top:8px">${onlineBadge} · <span class="rank">Lv ${p.level} · ${getRank(p.level*100+p.exp)}</span></p>
       <p class="mu" style="margin-top:8px">Negara: ${esc(p.country||"-")} · Server: ${esc(p.server||"-")}</p>
@@ -426,6 +456,115 @@ function filterChatPlayers(){
   }).join("")||"<p class='mu'>Kosong</p>";
 }
 
+
+
+async function openUpgradeRole(){
+  const role=getRole();
+  let body="";
+  if(role==='admin'){
+    body=`<p class="mu">Kamu sudah <b>Admin</b>. Role ini tidak bisa dibeli dan hanya diatur dari Admin Panel.</p>
+    <p>👑 Unlimited koin, uang, kekuatan · akses penuh.</p>`;
+  }else if(role==='premium'){
+    body=`<p>Statusmu: ${roleBadge('premium')}</p>
+    <p class="mu" style="margin-top:8px">Akses Premium aktif: bisa membuat server (maks ${PREMIUM_MAX_SERVERS}).</p>
+    <p class="mu">Admin tidak bisa dibeli — hanya diberikan admin game.</p>`;
+  }else{
+    body=`<p>Statusmu: ${roleBadge('biasa')}</p>
+    <p class="mu" style="margin-top:8px">Upgrade ke <b>Premium</b> untuk membuat server sendiri (maks ${PREMIUM_MAX_SERVERS}).</p>
+    <p style="margin-top:10px">Harga: <b>🪙 ${fmt(PREMIUM_PRICE)}</b> koin</p>
+    <p class="mu">Koinmu: 🪙 ${fmt(coins)}</p>
+    <button class="btn" style="margin-top:10px" onclick="buyPremium()">⭐ Upgrade ke Premium</button>
+    <p class="mu" style="margin-top:12px">Role <b>Admin</b> tidak dijual.</p>`;
+  }
+  $("app").innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between"><b>🎖️ Role / Title</b>
+  <button class="btn-gray" style="padding:4px 10px" onclick="lobby()">←</button></div>
+  <p style="margin-top:8px">Role saat ini: ${roleBadge(role)} <b>${roleTitle(role)}</b></p></div>
+  <div class="card">${body}</div>
+  <div class="card"><b>Perbandingan</b>
+  <p class="mu">👤 <b>Biasa</b> — main normal, gabung server</p>
+  <p class="mu">⭐ <b>Premium</b> — buat server (maks ${PREMIUM_MAX_SERVERS})</p>
+  <p class="mu">👑 <b>Admin</b> — unlimited resource + penuh (tidak bisa dibeli)</p></div>`;
+}
+async function buyPremium(){
+  if(getRole()!=='biasa')return toast("Sudah Premium/Admin");
+  if(coins<PREMIUM_PRICE)return toast("Koin kurang (butuh "+fmt(PREMIUM_PRICE)+")");
+  if(!confirm("Upgrade ke Premium seharga "+fmt(PREMIUM_PRICE)+" koin?"))return;
+  try{
+    coins-=PREMIUM_PRICE;
+    await saveCoins();
+    let row=metaRow;
+    if(!row||!row.id){
+      await ensureMeta();
+      row=metaRow;
+    }
+    if(!row||!row.id)return toast("Meta tidak ada");
+    const ex={...(row.extra||{}),role:'premium',premium_at:new Date().toISOString()};
+    await api("PATCH",API_META+"?id="+row.id,KEY_META,{extra:ex,is_admin:false});
+    if(metaRow){metaRow.extra=ex;metaRow.is_admin=false}
+    toast("⭐ Selamat! Kamu Premium");
+    openUpgradeRole();
+  }catch(e){toast("Gagal: "+e.message)}
+}
+async function openCreateServer(){
+  if(!isPremiumAcc())return toast("Hanya Premium/Admin yang bisa buat server");
+  // count owned servers
+  let owned=0;
+  try{
+    const list=arr(await api("GET",API_META,KEY_META)).filter(x=>String(x.player_id).startsWith(SRV_PREFIX)||(x.extra&&x.extra.is_server));
+    owned=list.filter(s=>{
+      const ex=s.extra||{};
+      return ex.created_by===uid||ex.owner_id===uid;
+    }).length;
+  }catch(e){}
+  const maxS=isAdminAcc()?99:PREMIUM_MAX_SERVERS;
+  $("app").innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between"><b>🛠️ Buat Server</b>
+  <button class="btn-gray" style="padding:4px 10px" onclick="serverScreen()">←</button></div>
+  <p class="mu">Role: ${roleBadge(getRole())} · Server milikmu: ${owned}/${maxS}</p>
+  ${owned>=maxS?'<p style="color:var(--bad)">Batas server tercapai.</p>':''}
+  <label class="mu">Kode server (opsional)</label>
+  <input id="newSid" placeholder="S-XXXX" style="text-transform:uppercase">
+  <label class="mu">Durasi</label>
+  <select id="newSType">
+    <option value="free">Free 24 jam</option>
+    <option value="timed">Timed (jam)</option>
+    ${isAdminAcc()?'<option value="permanent">Permanent</option>':''}
+  </select>
+  <label class="mu">Jam (jika timed)</label>
+  <input id="newSHours" type="number" value="24" min="1" max="168">
+  <label class="mu">Min Level</label>
+  <input id="newSMin" type="number" value="1" min="1">
+  <button class="btn" ${owned>=maxS?'disabled style="opacity:.5"':''} onclick="doCreateServer()">Buat Server</button></div>`;
+}
+function genSrvCode(){return "S-"+Math.random().toString(36).slice(2,6).toUpperCase()}
+async function doCreateServer(){
+  if(!isPremiumAcc())return toast("Premium/Admin only");
+  const maxS=isAdminAcc()?99:PREMIUM_MAX_SERVERS;
+  try{
+    const list=arr(await api("GET",API_META,KEY_META)).filter(x=>String(x.player_id).startsWith(SRV_PREFIX)||(x.extra&&x.extra.is_server));
+    const owned=list.filter(s=>{const ex=s.extra||{};return ex.created_by===uid||ex.owner_id===uid}).length;
+    if(owned>=maxS)return toast("Batas server: "+maxS);
+  }catch(e){}
+  let code=($("newSid").value||"").trim().toUpperCase()||genSrvCode();
+  if(!code.startsWith("S-"))code="S-"+code;
+  const type=$("newSType").value;
+  const hours=+$("newSHours").value||24;
+  const minLv=+$("newSMin").value||1;
+  let expires=null;
+  if(type==="free")expires=new Date(Date.now()+24*3600*1000).toISOString();
+  else if(type==="timed")expires=new Date(Date.now()+hours*3600*1000).toISOString();
+  try{
+    const exists=arr(await api("GET",API_META,KEY_META)).find(x=>{
+      const ex=x.extra||{};return (ex.server_code===code)||x.player_id===SRV_PREFIX+code;
+    });
+    if(exists)return toast("Kode sudah dipakai");
+    await api("POST",API_META,KEY_META,{
+      player_id:SRV_PREFIX+code,is_admin:false,is_banned:false,is_whitelisted:false,
+      extra:{is_server:true,server_code:code,server_type:type,server_expires_at:expires,server_is_active:true,server_min_level:minLv,created_at:new Date().toISOString(),created_by:uid,owner_id:uid,owner_name:ACC?.name||uid}
+    });
+    toast("✅ Server "+code+" dibuat");
+    serverScreen();
+  }catch(e){toast("Gagal: "+e.message)}
+}
 
 async function openTrade(){
   if(S){toast("Uang & kekuatan reset tiap pilih negara · Trade di Lobby");return}
@@ -944,6 +1083,7 @@ async function lobby(){
   <button class="btn" style="margin-top:8px" onclick="openCoinShop()">🛒 Toko Koin / Keranjang</button>
   <button class="btn-blue" style="margin-top:8px" onclick="openTrade('lobby')">🤝 Trade (Lobby)</button>
   <button class="btn" style="margin-top:8px" onclick="openProfileCheck()">🔍 Cek Profil</button>
+  <button class="btn" style="margin-top:8px" onclick="openUpgradeRole()">🎖️ Role / Upgrade</button>
   <p class="mu" style="margin-top:12px;text-align:center">${CS.length} negara · Chat permanen · Trade di Lobby</p>`;
 }
 async function serverScreen(){
