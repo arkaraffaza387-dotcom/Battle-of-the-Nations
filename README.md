@@ -120,6 +120,96 @@ function roleTitle(role){
   return 'Biasa';
 }
 const PREMIUM_PRICE=500000; // koin untuk upgrade Biasa → Premium
+const GACHA_BOT_PREFIX="GACHABOT|";
+const GACHA_BL_PREFIX="GACHABL|";
+const DEFAULT_GACHA={
+  enabled:true,
+  daily_limit:10,
+  title:"Gacha Bot",
+  prizes:[
+    {pct:40,w:40,t:"coins",v:10,label:"🪙 10 Koin"},
+    {pct:25,w:25,t:"coins",v:25,label:"🪙 25 Koin"},
+    {pct:15,w:15,t:"coins",v:50,label:"🪙 50 Koin"},
+    {pct:8,w:8,t:"army",v:15,label:"⚔️ 15 Pasukan"},
+    {pct:5,w:5,t:"money",v:500,label:"💰 500 Uang"},
+    {pct:3,w:3,t:"army",v:40,label:"⚔️ 40 Pasukan"},
+    {pct:2,w:2,t:"money",v:2000,label:"💰 2Rb Uang"},
+    {pct:1.5,w:1.5,t:"coins",v:100,label:"🪙 100 Koin"},
+    {pct:0.5,w:0.5,t:"coins",v:200,label:"🪙 200 Koin"}
+  ]
+};
+async function loadGachaConfig(){
+  try{
+    const list=arr(await api("GET",API_META,KEY_META));
+    const row=list.find(x=>x.player_id===GACHA_BOT_PREFIX+"CONFIG"||(x.extra&&x.extra.is_gacha_config));
+    if(row&&row.extra&&row.extra.config){
+      const c=row.extra.config;
+      const prizes=(c.prizes&&c.prizes.length)?c.prizes:DEFAULT_GACHA.prizes;
+      return {...DEFAULT_GACHA,...c,prizes};
+    }
+    // tidak ada config admin → default tetap bisa, kecuali admin sudah pernah hapus (optional: disabled)
+  }catch(e){}
+  return {...DEFAULT_GACHA,prizes:DEFAULT_GACHA.prizes.slice()};
+}
+async function isGachaBlacklisted(pid){
+  try{
+    const list=arr(await api("GET",API_META,KEY_META));
+    return list.some(x=>{
+      const ex=x.extra||{};
+      if(ex.is_gacha_bl&&ex.player_id===pid&&ex.active!==false)return true;
+      if(String(x.player_id)===GACHA_BL_PREFIX+pid)return true;
+      if(x.player_id===pid&&ex.gacha_blacklist)return true;
+      return false;
+    });
+  }catch(e){return false}
+}
+function gachaDayKey(){return "gacha_bot_"+wibDay()}
+function gachaUsed(){try{return +ls(gachaDayKey())||0}catch(e){return 0}}
+function gachaAddUse(){const n=gachaUsed()+1;ls(gachaDayKey(),String(n));return n}
+function pickGachaPrize(prizes){
+  const arr=(prizes&&prizes.length?prizes:DEFAULT_GACHA.prizes).filter(p=>(+p.pct||+p.w||0)>0);
+  if(!arr.length)return null;
+  let total=arr.reduce((s,p)=>s+(+p.pct||+p.w||0),0);
+  let r=Math.random()*total;
+  for(const p of arr){r-=(+p.pct||+p.w||0);if(r<=0)return p}
+  return arr[arr.length-1];
+}
+function formatPrizeOdds(prizes){
+  const arr=prizes&&prizes.length?prizes:DEFAULT_GACHA.prizes;
+  const total=arr.reduce((s,p)=>s+(+p.pct||+p.w||0),0)||1;
+  return arr.map(p=>{
+    const pct=Math.round(((+p.pct||+p.w||0)/total)*10000)/100;
+    return (p.label||p.t)+" ("+pct+"%)";
+  }).join(" · ");
+}
+async function grantGachaPrize(p){
+  if(!p)return "Kosong";
+  if(p.t==="coins"){coins=(coins||0)+(+p.v||0);if(!isAdminAcc())coins=sanitizeCoins(coins);await saveCoins();return p.label||("🪙 +"+p.v)}
+  if(p.t==="money"){
+    if(S){S.m=(S.m||0)+(+p.v||0)}
+    else if(statsRow&&statsRow.id){
+      const gs={...(statsRow.game_stats||{})};
+      gs.pending_money=(+gs.pending_money||0)+(+p.v||0);
+      await api("PATCH",API_STATS+"?id="+statsRow.id,KEY_STATS,{game_stats:gs});
+      statsRow.game_stats=gs;
+      return (p.label||("💰 +"+p.v))+" (masuk saat pilih negara)";
+    }
+    return p.label||("💰 +"+p.v);
+  }
+  if(p.t==="army"){
+    if(S){S.army=(S.army||0)+(+p.v||0)}
+    else if(statsRow&&statsRow.id){
+      const gs={...(statsRow.game_stats||{})};
+      gs.pending_army=(+gs.pending_army||0)+(+p.v||0);
+      await api("PATCH",API_STATS+"?id="+statsRow.id,KEY_STATS,{game_stats:gs});
+      statsRow.game_stats=gs;
+      return (p.label||("⚔️ +"+p.v))+" (masuk saat pilih negara)";
+    }
+    return p.label||("⚔️ +"+p.v);
+  }
+  return p.label||"Hadiah";
+}
+
 const PREMIUM_MAX_SERVERS=3;
 
 function clampNum(n,max){n=+n||0;if(!isFinite(n)||n<0)return 0;return Math.min(Math.floor(n),max)}
@@ -292,7 +382,7 @@ function leaveChat(){clearInterval(chatTimer);chatTimer=null;lobby()}
 function renderChat(){
   $("app").innerHTML=chatTabsHtml()+`<div class="chatbox" id="chatBox"><p class="mu" style="text-align:center;margin:auto">Memuat chat...</p></div>
   <div style="display:flex;gap:6px;margin-top:8px"><input id="chatIn" maxlength="${CHAT_MAX}" placeholder="Ngobrol..." autocomplete="off" style="margin:0" onkeydown="if(event.key==='Enter')sendChat()"><button class="btn" style="width:auto;margin:0;padding:10px 16px" onclick="sendChat()">Kirim</button></div>
-  <p class="mu" style="margin-top:6px">Chat permanen — hanya admin yang bisa reset. Ketuk nama untuk trade.</p>`;
+  <p class="mu" style="margin-top:6px">Chat permanen · Gacha: ketik ¿start · Putar: ¿gacha · Ketuk nama untuk trade.</p>`;
   chatSig="";
   loadChat(true);
   chatTimer=setInterval(loadChat,4000);
@@ -332,9 +422,41 @@ async function sendChat(){
   chatLastSend=now;chatLastText=text;inp.value="";
   try{
     await chatSend({kind:"msg",server:CHAT_ROOM,uid,name:ACC?.name||"Pemain",flag:"",text,at:new Date().toISOString(),investigation:isInvestigation()});
+    // Gacha Bot commands
+    const cmd=text.trim().toLowerCase();
+    if(cmd==="¿start"||cmd==="?start"||cmd==="/start")await handleGachaStart();
+    else if(cmd==="¿gacha"||cmd==="?gacha"||cmd==="/gacha"||cmd==="¿spin"||cmd==="?spin")await handleGachaSpin();
     loadChat(true);
   }catch(e){toast(e.message);inp.value=text}
 }
+async function botSay(text){
+  try{
+    await chatSend({kind:"sys",server:CHAT_ROOM,name:"GachaBot",text,at:new Date().toISOString()});
+  }catch(e){}
+}
+async function handleGachaStart(){
+  if(await isGachaBlacklisted(uid)){await botSay("🚫 @"+(ACC?.name||uid)+" ada di daftar hitam Gacha.");return}
+  const cfg=await loadGachaConfig();
+  if(!cfg.enabled){await botSay("⏸️ Gacha Bot sedang nonaktif.");return}
+  const used=gachaUsed();
+  const sisa=Math.max(0,(cfg.daily_limit||10)-used);
+  const lines=formatPrizeOdds(cfg.prizes);
+  await botSay("🎡 "+(cfg.title||"Gacha Bot")+"\nKetik ¿gacha untuk putar.\nSisa hari ini: "+sisa+"/"+(cfg.daily_limit||10)+"\nPeluang: "+lines);
+}
+async function handleGachaSpin(){
+  if(await isGachaBlacklisted(uid)){await botSay("🚫 @"+(ACC?.name||uid)+" tidak bisa gacha (blacklist).");return}
+  const cfg=await loadGachaConfig();
+  if(!cfg.enabled){await botSay("⏸️ Gacha Bot nonaktif.");return}
+  const limit=cfg.daily_limit||10;
+  const used=gachaUsed();
+  if(used>=limit){await botSay("⏳ @"+(ACC?.name||uid)+" batas harian gacha habis ("+limit+"x).");return}
+  const prize=pickGachaPrize(cfg.prizes);
+  const label=await grantGachaPrize(prize);
+  gachaAddUse();
+  const sisa=Math.max(0,limit-gachaUsed());
+  await botSay("🎉 @"+(ACC?.name||uid)+" dapat "+label+" · sisa "+sisa+"/"+limit);
+}
+
 function pickChatTarget(id,name){
   if(id===uid)return;
   window._tradeTo={id,name};
@@ -458,6 +580,16 @@ function filterChatPlayers(){
 
 
 
+
+function buyRoleWA(){
+  const name=(ACC&&ACC.name)||"-";
+  const id=uid||"-";
+  const role=getRole();
+  const msg=encodeURIComponent("Halo Admin, saya ingin beli/upgrade Role.\nNama: "+name+"\nID: "+id+"\nRole sekarang: "+role+"\n(Premium / Admin)");
+  const wa=(typeof ADMIN_WA!=="undefined"&&ADMIN_WA)?ADMIN_WA:"6285882382854";
+  window.open("https://wa.me/"+wa+"?text="+msg,"_blank");
+}
+
 async function openUpgradeRole(){
   const role=getRole();
   let body="";
@@ -483,7 +615,11 @@ async function openUpgradeRole(){
   <div class="card"><b>Perbandingan</b>
   <p class="mu">👤 <b>Biasa</b> — main normal, gabung server</p>
   <p class="mu">⭐ <b>Premium</b> — buat server (maks ${PREMIUM_MAX_SERVERS})</p>
-  <p class="mu">👑 <b>Admin</b> — unlimited resource + penuh (tidak bisa dibeli)</p></div>`;
+  <p class="mu">👑 <b>Admin</b> — unlimited resource + penuh</p></div>
+  <div class="card"><b>💬 Beli Role via Admin</b>
+  <p class="mu">Hubungi admin WhatsApp untuk upgrade Premium/Admin (transfer manual).</p>
+  <p style="font-size:18px;font-weight:800;margin:8px 0">0858-8238-2854</p>
+  <button class="btn" style="background:linear-gradient(135deg,#2f9e44,#37b24d)" onclick="buyRoleWA()">💬 Beli Role (WhatsApp)</button></div>`;
 }
 async function buyPremium(){
   if(getRole()!=='biasa')return toast("Sudah Premium/Admin");
@@ -1084,6 +1220,7 @@ async function lobby(){
   <button class="btn-blue" style="margin-top:8px" onclick="openTrade('lobby')">🤝 Trade (Lobby)</button>
   <button class="btn" style="margin-top:8px" onclick="openProfileCheck()">🔍 Cek Profil</button>
   <button class="btn" style="margin-top:8px" onclick="openUpgradeRole()">🎖️ Role / Upgrade</button>
+  <button class="btn" style="margin-top:8px;background:linear-gradient(135deg,#2f9e44,#37b24d)" onclick="buyRoleWA()">💬 Beli Role (WA)</button>
   <p class="mu" style="margin-top:12px;text-align:center">${CS.length} negara · Chat permanen · Trade di Lobby</p>`;
 }
 async function serverScreen(){
