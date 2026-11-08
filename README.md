@@ -81,6 +81,7 @@ const KEY_CHAT="dk_fa72a2910ae64758862bc32b6e73e43d";
 const CHAT_MAX=200,CHAT_SHOW=80,CHAT_ROOM="PUBLIK";
 const SRV_PREFIX="SERVER|",QUEST_PREFIX="QUEST|";
 const DAY_MS=24*3600*1000;
+const REVIEW_MAX_DAYS=14,REVIEW_MS=3*60*1000,ADMIN_PHONE="0858-8238-2854",ADMIN_WA="6285882382854";
 /* ===== ANTI-CHEAT ===== */
 const MAX_COINS=5e8;      // 500 juta koin maks (non-admin)
 const MAX_MONEY=1e18;     // uang sangat besar masih sah (admin gift)
