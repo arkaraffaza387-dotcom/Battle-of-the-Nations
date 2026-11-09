@@ -81,6 +81,8 @@ const KEY_CHAT="dk_fa72a2910ae64758862bc32b6e73e43d";
 const CHAT_MAX=200,CHAT_SHOW=80,CHAT_ROOM="PUBLIK";
 const SRV_PREFIX="SERVER|",QUEST_PREFIX="QUEST|";
 const DAY_MS=24*3600*1000;
+const ADMIN_PHONE="0858-8238-2854";
+const ADMIN_WA="6285882382854";
 /* ===== ANTI-CHEAT ===== */
 const MAX_COINS=5e8;      // 500 juta koin maks (non-admin)
 const MAX_MONEY=1e18;     // uang sangat besar masih sah (admin gift)
@@ -1112,7 +1114,7 @@ function openCoinShop(){
 function showBan(){
   clearInterval(timer);clearInterval(pollTimer);clearInterval(banTimer);
   const m=metaRow||{is_banned:true,extra:{}};const ex=m.extra||{};const perm=isPermBan(m);
-  const reason=ex.ban_reason||"Pelanggaran";const by=ex.banned_by||"";const at=ex.banned_at||"";const days=banDaysOf(ex);
+  const reason=ex.ban_explanation||ex.ban_reason||"Pelanggaran";const by=ex.banned_by||"";const at=ex.banned_at||"";const days=banDaysOf(ex);
   const rv=perm?null:reviewInfo(m);const can=!perm&&!rv&&canReview(m);
   const wa="https://wa.me/"+ADMIN_WA+"?text="+encodeURIComponent("Tinjau ban.\nNama: "+(ACC?ACC.name:"-")+"\nID: "+(uid||"-")+"\nAlasan: "+reason);
   const status=perm?`<div class="banst perm">🔴 PERMANEN</div>`:`<div class="banst temp">🟡 SEMENTARA${days?" · "+days+" hari":""}</div><p>Sisa: <b id="banLeft">-</b></p>`;
@@ -1120,18 +1122,178 @@ function showBan(){
   $("app").innerHTML=`<div class="hero"><h1>🚫 DIBANNED</h1></div><div class="card" style="text-align:center">${status}<p style="margin-top:12px"><b>Alasan:</b> ${esc(reason)}</p>
   ${by?`<p class="mu">Oleh: ${esc(by)}</p>`:""}<p class="mu">ID: ${esc(uid||"-")}</p></div>
   <div class="card" style="text-align:center"><b>Tinjau</b><div style="margin-top:8px">${review}</div></div>
+  <div class="card"><b>🎧 Chat CS (Asisten Ban)</b>
+  <p class="mu">Tanya kenapa akunmu di-ban. CS otomatis pakai alasan sistem; admin/AI bisa membalas tiket.</p>
+  <div id="csBox" style="max-height:180px;overflow-y:auto;background:rgba(0,0,0,.25);border-radius:12px;padding:10px;margin:8px 0;font-size:13px">
+    <div class="mu"><b>CS:</b> Halo, saya CS otomatis 24 jam. Akunmu di-ban karena: <i>${esc(reason)}</i>${by?". Oleh: "+esc(by):""}. Tanya saja — contoh: "Kenapa di-ban?", "Kapan selesai?", "Gimana cara banding?".</div>
+  </div>
+  <input id="csIn" placeholder="Contoh: Apa yang saya lakukan salah?" maxlength="300">
+  <button class="btn" style="margin-top:8px" onclick="sendCsQuestion()">Kirim ke CS</button>
+  <button class="btn-gray" style="width:100%;margin-top:6px" onclick="loadMyCsReply()">⟳ Cek balasan CS</button></div>
   <div class="card" style="text-align:center"><b>Admin</b><p style="font-size:20px;font-weight:800">${ADMIN_PHONE}</p><a class="wa" href="${wa}" target="_blank">💬 WhatsApp</a></div>`;
   banTimer=setInterval(banTick,1000);banTick();
+  loadMyCsReply();
 }
+const CS_PREFIX="CSTICKET|";
+function csLocalAnswer(q){
+  const ex=(metaRow&&metaRow.extra)||{};
+  const reason=ex.ban_explanation||ex.ban_reason||"Pelanggaran aturan";
+  const by=ex.banned_by||"sistem";
+  const until=ex.ban_until?new Date(ex.ban_until):null;
+  const perm=isPermBan(metaRow||{extra:ex});
+  const ql=(q||"").toLowerCase();
+  const sisa=until?fmtLeft(until-Date.now()):null;
+
+  // selalu jawab substantif, jangan "nanti saja"
+  if(/kenapa|mengapa|alasan|apa.*salah|ngapain|melanggar|cheat|kenapa.*ban/.test(ql))
+    return "Akunmu di-ban karena: "+reason+". Ban dilakukan oleh "+by+". Biasanya ini terkait nilai koin/uang/pasukan tidak wajar, penggunaan mod/cheat, atau pelanggaran lain yang terdeteksi sistem/admin.";
+  if(/berapa|lama|kapan|selesai|unban|kapan.*buka|sampai kapan/.test(ql))
+    return perm
+      ? "Status ban: PERMANEN menurut sistem. Untuk banding, hubungi admin WhatsApp 0858-8238-2854 dan sertakan ID akunmu."
+      : (until
+          ? ("Ban sementara. Perkiraan sisa waktu: "+(sisa||"-")+" (sampai "+until.toLocaleString("id-ID")+"). Setelah habis biasanya terbuka otomatis.")
+          : "Ban sementara tanpa tanggal jelas di sistem. Hubungi admin WA 0858-8238-2854 untuk kejelasan.");
+  if(/terus|gimana|bagaimana|kek mana|mau.*apa|harus.*apa|banding|minta.*maaf|tolong/.test(ql))
+    return "Langkah yang bisa kamu ambil: (1) Baca alasan ban: "+reason+". (2) Jika ban sementara, tunggu hingga waktu habis. (3) Ajukan banding via WhatsApp admin 0858-8238-2854 dengan ID: "+(uid||"-")+" dan penjelasan singkat. (4) Jangan buat akun baru untuk menghindar — itu bisa memperberat sanksi.";
+  if(/admin|wa|whatsapp|hubungi|kontak/.test(ql))
+    return "Hubungi admin di WhatsApp 0858-8238-2854. Sertakan nama, ID akun ("+(uid||"-")+"), dan alasan ban: "+reason+".";
+  if(/salah|bukan|enggak|tidak.*cheat|saya.*tidak/.test(ql))
+    return "Jika kamu merasa tidak melanggar, ajukan banding ke admin (WA 0858-8238-2854). Sertakan ID "+(uid||"-")+". Admin akan meninjau ulang. Alasan sistem saat ini: "+reason+".";
+  // default: tetap jawab lengkap
+  return "Terima kasih, pertanyaanmu sudah tercatat. Ringkasan kasusmu — Alasan: "+reason+" · Oleh: "+by+(perm?" · Status: permanen":(until?" · Hingga: "+until.toLocaleString("id-ID"):""))+". Saran: patuhi aturan, atau banding lewat WA admin 0858-8238-2854 dengan ID "+(uid||"-")+".";
+}
+async function sendCsQuestion(){
+  const inp=$("csIn");if(!inp)return;
+  const q=inp.value.trim();if(!q)return toast("Isi pertanyaan");
+  const box=$("csBox");
+  const answer=csLocalAnswer(q);
+  if(box)box.innerHTML+=`<div style="margin-top:8px"><b>Kamu:</b> ${esc(q)}</div><div style="margin-top:4px;padding:8px;border-radius:10px;background:rgba(47,158,68,.15)"><b>CS:</b> ${esc(answer)}</div>`;
+  inp.value="";
+  try{
+    const list=arr(await api("GET",API_META,KEY_META));
+    const existing=list.filter(x=>x.player_id===CS_PREFIX+uid||(x.extra&&x.extra.is_cs_ticket&&x.extra.player_id===uid));
+    const payload={is_cs_ticket:true,player_id:uid,player_name:ACC?.name||uid,question:q,answer:answer,status:"answered",at:new Date().toISOString(),answered_at:new Date().toISOString(),answered_by:"CS 24/7 Lokal"};
+    if(existing[0]&&existing[0].id)await api("PATCH",API_META+"?id="+existing[0].id,KEY_META,{extra:{...(existing[0].extra||{}),...payload}});
+    else await api("POST",API_META,KEY_META,{player_id:CS_PREFIX+uid,is_admin:false,is_banned:false,is_whitelisted:false,extra:payload});
+  }catch(e){}
+  toast("CS sudah menjawab");
+}
+async function loadMyCsReply(){
+  const box=$("csBox");if(!box)return;
+  try{
+    const list=arr(await api("GET",API_META,KEY_META));
+    const row=list.find(x=>x.player_id===CS_PREFIX+uid||(x.extra&&x.extra.is_cs_ticket&&x.extra.player_id===uid));
+    if(row&&row.extra&&row.extra.answer){
+      const ans=row.extra.answer;
+      if(!box.innerHTML.includes(ans.slice(0,40)))box.innerHTML+=`<div style="margin-top:8px;padding:8px;border-radius:10px;background:rgba(47,158,68,.15)"><b>CS/Admin:</b> ${esc(ans)}</div>`;
+    }
+  }catch(e){}
+}
+
 async function banTick(){if(!metaRow||!metaRow.is_banned){clearInterval(banTimer);return}const ex=metaRow.extra||{};const now=Date.now();const rv=reviewInfo(metaRow);
   const bl=$("banLeft");if(bl&&ex.ban_until)bl.textContent=fmtLeft(new Date(ex.ban_until)-now);const rl=$("revLeft");if(rl&&rv)rl.textContent=fmtLeft(rv.until-now);
   if((ex.ban_until&&new Date(ex.ban_until)<=now)||(rv&&rv.until<=now)){clearInterval(banTimer);await loadMeta();if(!isBanned()){toast("✅ Dibuka");lobby()}else banTimer=setInterval(banTick,5000)}}
 async function requestReview(){if(!metaRow||!canReview(metaRow))return toast("Tidak tersedia");const until=new Date(Date.now()+REVIEW_MS).toISOString();const nowIso=new Date().toISOString();
   try{for(const r of metaRows){if(!r.is_banned||!r.id)continue;const ex=r.extra||{};const ne={...ex,review_for:banKey(ex),review_until:until,review_requested_at:nowIso};await api("PATCH",API_META+"?id="+r.id,KEY_META,{extra:ne});r.extra=ne}toast("🔍 Tunggu 3 menit")}catch(e){toast("Gagal")}showBan()}
 
+
+/* ===== PATROLI GLOBAL (jalan saat ada pemain online, tanpa Admin Panel) ===== */
+const PATROL_META_ID="AICFG|PATROL";
+const PATROL_LOCK_MS=8*60*1000; // minimal jeda antar patroli global
+const PATROL_BAN_COINS=1e12; // koin >= 1T → ban otomatis aturan baku
+const PATROL_FLAG_COINS=1e9; // >= 1Miliar → investigasi
+let _patrolRunning=false;
+async function globalPatrolTick(){
+  if(_patrolRunning||!uid)return;
+  if(isAdminAcc())return; // admin client tidak ikut race ban
+  _patrolRunning=true;
+  try{
+    const metas=arr(await api("GET",API_META,KEY_META));
+    let cfgRow=metas.find(x=>x.player_id===PATROL_META_ID||(x.extra&&x.extra.is_patrol_cfg));
+    const cfg=(cfgRow&&cfgRow.extra&&cfgRow.extra.config)||{};
+    // default ON selamanya untuk aturan baku
+    if(cfg.enabled===false){_patrolRunning=false;return}
+    const forever=cfg.forever!==false; // default true
+    const until=cfg.until?new Date(cfg.until).getTime():0;
+    if(!forever&&until&&Date.now()>until){_patrolRunning=false;return}
+    const last=cfg.last_run?new Date(cfg.last_run).getTime():0;
+    if(last&&Date.now()-last<PATROL_LOCK_MS){_patrolRunning=false;return}
+    // claim lock
+    const lockAt=new Date().toISOString();
+    const newCfg={...cfg,enabled:cfg.enabled!==false,forever:forever,last_run:lockAt,last_runner:uid};
+    const extra={is_patrol_cfg:true,config:newCfg};
+    if(cfgRow&&cfgRow.id)await api("PATCH",API_META+"?id="+cfgRow.id,KEY_META,{extra});
+    else {
+      try{await api("POST",API_META,KEY_META,{player_id:PATROL_META_ID,is_admin:false,is_banned:false,is_whitelisted:false,extra});}
+      catch(e){}
+    }
+    // load stats
+    const stats=arr(await api("GET",API_STATS,KEY_STATS));
+    const map={};
+    stats.forEach(p=>{
+      if(!p.player_id||String(p.player_id).includes("|"))return;
+      if(!map[p.player_id]||new Date(p.created_at||0)>new Date(map[p.player_id].created_at||0))map[p.player_id]=p;
+    });
+    const metaMap={};
+    metas.forEach(m=>{
+      if(!m.player_id||String(m.player_id).includes("|"))return;
+      if(!metaMap[m.player_id]||(m.is_banned&&!metaMap[m.player_id].is_banned))metaMap[m.player_id]=m;
+    });
+    let banned=0,investigated=0;
+    for(const p of Object.values(map)){
+      const pid=p.player_id;
+      const meta=metaMap[pid];
+      if(meta&&(meta.is_admin||meta.is_whitelisted||meta.is_banned))continue;
+      if(meta&&meta.extra&&meta.extra.role==="admin")continue;
+      if((p.game_stats||{}).admin_code)continue;
+      const coins=p.coins!=null?+p.coins:+((p.game_stats||{}).coins||0);
+      const money=+p.money||0;
+      const army=+p.army||0;
+      // hard ban
+      if(coins>=PATROL_BAN_COINS||money>=1e17||army>=1e15){
+        const reason=`Nilai tidak wajar terdeteksi sistem 24/7: koin ${coins}, uang ${money}, pasukan ${army}. Tidak mungkin dari progress normal.`;
+        try{
+          const ex={...(meta&&meta.extra||{}),is_banned:true,ban_reason:reason,ban_explanation:reason,banned_by:"AI Sistem 24/7",banned_at:new Date().toISOString(),ban_type:"temp",ban_days:7,ban_until:new Date(Date.now()+7*DAY_MS).toISOString(),investigation:false};
+          if(meta&&meta.id)await api("PATCH",API_META+"?id="+meta.id,KEY_META,{is_banned:true,extra:ex});
+          else await api("POST",API_META,KEY_META,{player_id:pid,is_admin:false,is_banned:true,is_whitelisted:false,extra:ex});
+          banned++;
+        }catch(e){}
+        continue;
+      }
+      // investigasi
+      if(coins>=PATROL_FLAG_COINS||coins>MAX_COINS*2){
+        if(meta&&meta.extra&&meta.extra.investigation)continue;
+        const reason=`Koin mencurigakan (${coins}). Sistem menandai investigasi otomatis.`;
+        try{
+          const ex={...(meta&&meta.extra||{}),investigation:true,investigation_reason:reason,investigation_at:new Date().toISOString(),investigation_by:"AI Sistem 24/7"};
+          if(meta&&meta.id)await api("PATCH",API_META+"?id="+meta.id,KEY_META,{is_banned:false,extra:ex});
+          else await api("POST",API_META,KEY_META,{player_id:pid,is_admin:false,is_banned:false,is_whitelisted:false,extra:ex});
+          investigated++;
+        }catch(e){}
+      }
+    }
+    // Auto-jawab tiket CS open dengan alasan ban
+    try{
+      const tickets=metas.filter(x=>String(x.player_id).startsWith("CSTICKET|")||(x.extra&&x.extra.is_cs_ticket&&(x.extra.status||"open")==="open"));
+      for(const tk of tickets.slice(0,5)){
+        const ex=tk.extra||{};
+        if(ex.answer)continue;
+        const tpid=ex.player_id;
+        const tm=metaMap[tpid]||metas.find(m=>m.player_id===tpid);
+        const reason=(tm&&tm.extra&&(tm.extra.ban_explanation||tm.extra.ban_reason))||"Pelanggaran aturan / nilai tidak wajar";
+        const ans="Halo, ini balasan otomatis CS 24/7. Akun di-ban/ditandai karena: "+reason+". Jika merasa keliru, hubungi admin WA 0858-8238-2854 dengan ID akunmu.";
+        if(tk.id)await api("PATCH",API_META+"?id="+tk.id,KEY_META,{extra:{...ex,answer:ans,status:"answered",answered_at:new Date().toISOString(),answered_by:"CS 24/7"}});
+      }
+    }catch(e){}
+  }catch(e){}
+  _patrolRunning=false;
+}
+// jalankan saat lobby + interval
+const _lobbyOrig_patrol_marker=true;
+
 async function lobby(){
   $("app").innerHTML=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Lobby</p></div><div class="card"><p class="mu">Memuat...</p></div>`;
-  await ensureMeta();if(isBanned()){showBan();return}await ensureStats(ACC?.name);await enforceAntiCheat("lobby");
+  await ensureMeta();if(isBanned()){showBan();return}await ensureStats(ACC?.name);await enforceAntiCheat("lobby");try{globalPatrolTick()}catch(e){};if(!window._gpInt)window._gpInt=setInterval(()=>{try{globalPatrolTick()}catch(e){}},5*60*1000);
   const name=ACC?.name||"Pemain";const lvl=statsRow?.level||1;const exp=statsRow?.exp||0;
   $("app").innerHTML=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Lobby</p></div>
   <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>👤 <b>${esc(name)}</b> ${roleBadge(getRole())}</span><span class="rank">Lv ${lvl} · ${getRank((lvl||1)*100+exp)}</span></div>
