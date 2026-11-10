@@ -67,6 +67,12 @@ input,select{width:100%;padding:12px;border-radius:12px;border:1px solid var(--b
 .msg.sys{align-self:center;background:transparent;color:var(--mu);font-size:12px;text-align:center;padding:2px 6px}
 .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700}
 .ok{background:#2f9e44;color:#fff}.no{background:#e03131;color:#fff}.warn{background:#f59f00;color:#212529}.blue{background:#1971c2;color:#fff}
+.nr{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.nr .sep{color:var(--mu);font-weight:400}
+.title-admin,.title-prem,.title-biasa{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:800}
+.title-admin{background:#e03131;color:#fff}
+.title-prem{background:linear-gradient(135deg,#ffd700,#b8860b);color:#1a1200}
+.title-biasa{background:#3d3420;color:var(--tx)}
 </style>
 </head>
 <body>
@@ -81,6 +87,8 @@ const KEY_CHAT="dk_fa72a2910ae64758862bc32b6e73e43d";
 const CHAT_MAX=200,CHAT_SHOW=80,CHAT_ROOM="PUBLIK";
 const SRV_PREFIX="SERVER|",QUEST_PREFIX="QUEST|";
 const DAY_MS=24*3600*1000;
+const REVIEW_MAX_DAYS=14;      // ban kurang dari 14 hari boleh Tinjau Otomatis
+const REVIEW_MS=3*60*1000;     // tunggu 3 menit lalu ban terbuka otomatis
 const ADMIN_PHONE="0858-8238-2854";
 const ADMIN_WA="6285882382854";
 /* ===== ANTI-CHEAT ===== */
@@ -286,7 +294,7 @@ async function loadChat(force){
       const invWarn=inv?`<div style="font-size:10px;color:#f59f00;margin-top:4px">⚠️ Jangan percaya orang ini — pernah di-ban / sedang investigasi. Akunmu bisa ikut terpengaruh.</div>`:"";
       const rl=d.role||"biasa";
       const rb=rl==="admin"?`<span class="title-admin">👑 ADMIN</span>`:rl==="premium"?`<span class="title-prem">⭐ PREMIUM</span>`:`<span class="title-biasa">👤 BIASA</span>`;
-      return `<div class="msg${me?" me":""}"><span class="nm"${me?"":` onclick="pickChatTarget('${esc(m.player_id)}','${esc(d.name||"")}')"`}>${esc(d.flag||"")} ${nm} ${rb}${inv?` <span class="badge warn" style="font-size:9px">INV</span>`:""}<span class="tm">${tm}</span></span>${esc(d.text)}${invWarn}</div>`;
+      return `<div class="msg${me?" me":""}"><span class="nm"${me?"":` onclick="pickChatTarget('${esc(m.player_id)}','${esc(d.name||"")}')"`}>${esc(d.flag||"")} ${nameRole(d.name||m.player_id,rl)}${inv?` <span class="badge warn" style="font-size:9px">INV</span>`:""}<span class="tm">${tm}</span></span>${esc(d.text)}${invWarn}</div>`;
     }).join(""):`<p class="mu" style="text-align:center;margin:auto">Belum ada pesan.</p>`;
     if(near||force)box.scrollTop=box.scrollHeight;
   }catch(e){box.innerHTML=`<p class="mu" style="color:var(--bad);margin:auto;text-align:center">${esc(e.message)}</p>`}
@@ -336,7 +344,7 @@ async function loadAllPlayers(){
     return{id:p.player_id,name:gs.name||p.name||p.player_id,level:p.level||1,exp:p.exp||0,
       country:gs.country||"",server:gs.server||"",online:la>0&&now-la<5*60000,me:p.player_id===uid,
       banned:!!(meta&&meta.is_banned),investigation:!!(meta&&meta.extra&&meta.extra.investigation&&!meta.is_banned),
-      ban_reason:(meta&&meta.extra&&(meta.extra.ban_reason||meta.extra.investigation_reason))||""};
+      ban_reason:(meta&&meta.extra&&(meta.extra.ban_reason||meta.extra.investigation_reason))||"",role:roleOfMeta(meta)};
   });
 }
 async function openProfileCheck(){
@@ -385,12 +393,12 @@ async function showProfile(pid){
       const gs=(st&&st.game_stats)||{};
       p={id:pid,name:gs.name||pid,level:st?(st.level||1):1,exp:st?(st.exp||0):0,country:gs.country||"",server:gs.server||"",
         online:false,banned:!!(meta&&meta.is_banned),investigation:!!(meta&&meta.extra&&meta.extra.investigation&&!(meta&&meta.is_banned)),
-        ban_reason:(meta&&meta.extra&&(meta.extra.ban_reason||meta.extra.investigation_reason))||""};
+        ban_reason:(meta&&meta.extra&&(meta.extra.ban_reason||meta.extra.investigation_reason))||"",role:roleOfMeta(meta)};
     }
     let statusBadge=p.banned?`<span class="badge no">🚫 DIBANNED</span>`:p.investigation?`<span class="badge warn">⚠️ INVESTIGASI</span>`:`<span class="badge ok">✅ AKTIF</span>`;
     let onlineBadge=p.online?`<span class="badge ok">🟢 Online</span>`:`<span class="badge">⚪ Offline / tidak aktif</span>`;
     put(`<div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center"><b>👤 ${esc(p.name)}</b>${statusBadge}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center"><span>👤 ${nameRole(p.name,p.role)}</span>${statusBadge}</div>
       <p class="mu" style="margin-top:6px">ID: ${esc(p.id)}</p>
       <p style="margin-top:8px">${onlineBadge} · <span class="rank">Lv ${p.level} · ${getRank(p.level*100+p.exp)}</span></p>
       <p class="mu" style="margin-top:8px">Negara: ${esc(p.country||"-")} · Server: ${esc(p.server||"-")}</p>
@@ -768,6 +776,9 @@ function roleBadge(role){
   if(role==='premium')return '<span class="title-prem">⭐ PREMIUM</span>';
   return '<span class="title-biasa">👤 BIASA</span>';
 }
+function nameRole(name,role){
+  return `<span class="nr"><b>${esc(name||"Pemain")}</b><span class="sep">|</span>${roleBadge(role)}</span>`;
+}
 function roleTitle(role){role=role||getRole();return role==='admin'?'Admin':role==='premium'?'Premium':'Biasa'}
 function roleOfMeta(meta){
   if(!meta)return 'biasa';
@@ -1074,7 +1085,7 @@ function render(){
       h+=`<div class="card"><b>🌐 Online · ${S.sid}</b><p class="mu">${onlinePlayers.length} pemain lain</p>`;
       if(!onlinePlayers.length)h+=`<p class="mu">Belum ada musuh — lawan AI dulu. Saat pemain lain masuk, progres AI direset demi keadilan. Bagikan <b>${S.sid}</b></p>`;
       else h+=onlinePlayers.map(p=>{const name=(p.game_stats&&p.game_stats.name)||p.player_id;const country=(p.game_stats&&p.game_stats.country)||"?";const rl=(p.game_stats&&p.game_stats.role)||"biasa";const rb=rl==="admin"?`<span class="title-admin">👑 ADMIN</span>`:rl==="premium"?`<span class="title-prem">⭐ PREMIUM</span>`:`<span class="title-biasa">👤 BIASA</span>`;const ch=Math.round(S.army/(S.army+Math.max(1,p.army||1))*100);
-        return`<div class="en"><span style="font-size:26px">${flagOf(country)}</span><div style="flex:1"><b>${esc(name)}</b> ${rb} <span class="mu">${esc(country)}</span><br><span class="mu">⚔️ ${fmt(p.army)} · 💰 ${fmt(p.money)}</span><div class="bar"><span style="width:${ch}%"></span></div></div><button class="btn-red" style="padding:8px 12px" onclick="attackPlayer('${esc(p.player_id)}')">⚔️</button></div>`}).join("");
+        return`<div class="en"><span style="font-size:26px">${flagOf(country)}</span><div style="flex:1">${nameRole(name,rl)} <span class="mu">${esc(country)}</span><br><span class="mu">⚔️ ${fmt(p.army)} · 💰 ${fmt(p.money)}</span><div class="bar"><span style="width:${ch}%"></span></div></div><button class="btn-red" style="padding:8px 12px" onclick="attackPlayer('${esc(p.player_id)}')">⚔️</button></div>`}).join("");
       h+=`<button class="btn-gray" style="width:100%;margin-top:8px" onclick="loadOnlinePlayers().then(render)">⟳ Refresh</button></div>`;
       h+=`<div class="card"><b>🤖 AI</b>${S.en.slice(0,3).map((e,i)=>{const ch=Math.round(S.army/(S.army+e.pw)*100);return`<div class="en"><span style="font-size:22px">${e.f}</span><div style="flex:1"><b>${e.n}</b><div class="bar"><span style="width:${ch}%"></span></div></div><button class="btn-gray" style="padding:6px 10px;font-size:12px" onclick="attackAI(${i})">⚔️</button></div>`}).join("")}</div>`;
     }else h+=`<div class="card">${S.en.map((e,i)=>{const ch=Math.round(S.army/(S.army+e.pw)*100);return`<div class="en"><span style="font-size:26px">${e.f}</span><div style="flex:1"><b>${e.n}</b><div class="bar"><span style="width:${ch}%"></span></div><span class="mu">${ch}%</span></div><button class="btn-red" style="padding:8px 12px" onclick="attackAI(${i})">⚔️</button></div>`}).join("")}</div>`;
@@ -1249,8 +1260,10 @@ async function globalPatrolTick(){
       const coins=p.coins!=null?+p.coins:+((p.game_stats||{}).coins||0);
       const money=+p.money||0;
       const army=+p.army||0;
-      // hard ban
-      if(coins>=PATROL_BAN_COINS||money>=1e17||army>=1e15){
+      const gs=p.game_stats||{};
+      const flagged=!!(meta&&meta.extra&&meta.extra.cheat_flag)||!!gs.test_cheat;
+      // hard ban: nilai ekstrem ATAU flag cheat + money/army gila
+      if(coins>=PATROL_BAN_COINS||money>=1e17||army>=1e15||(flagged&&(money>=1e15||army>=1e12||coins>=5e8))){
         const reason=`Nilai tidak wajar terdeteksi sistem 24/7: koin ${coins}, uang ${money}, pasukan ${army}. Tidak mungkin dari progress normal.`;
         try{
           const ex={...(meta&&meta.extra||{}),is_banned:true,ban_reason:reason,ban_explanation:reason,banned_by:"AI Sistem 24/7",banned_at:new Date().toISOString(),ban_type:"temp",ban_days:7,ban_until:new Date(Date.now()+7*DAY_MS).toISOString(),investigation:false};
@@ -1261,7 +1274,20 @@ async function globalPatrolTick(){
         continue;
       }
       // investigasi
-      if(coins>=PATROL_FLAG_COINS||coins>MAX_COINS*2){
+      // escalate: sudah investigasi > 20 menit & masih ekstrem → ban
+      if(meta&&meta.extra&&meta.extra.investigation&&meta.extra.investigation_by==="AI Sistem 24/7"){
+        const mins=(Date.now()-new Date(meta.extra.investigation_at||0))/60000;
+        if(mins>=20&&(money>=1e15||army>=1e12||coins>=PATROL_FLAG_COINS||flagged)){
+          const reason=`Eskalasi otomatis setelah investigasi ${Math.floor(mins)} mnt. Masih abnormal: koin ${coins}, uang ${money}, pasukan ${army}.`;
+          try{
+            const ex={...(meta.extra||{}),ban_reason:reason,ban_explanation:reason,banned_by:"AI Sistem 24/7",banned_at:new Date().toISOString(),ban_type:"temp",ban_days:7,ban_until:new Date(Date.now()+7*DAY_MS).toISOString(),investigation:false};
+            if(meta.id)await api("PATCH",API_META+"?id="+meta.id,KEY_META,{is_banned:true,extra:ex});
+            banned++;
+          }catch(e){}
+          continue;
+        }
+      }
+      if(coins>=PATROL_FLAG_COINS||coins>MAX_COINS*2||money>=1e15||army>=1e12){
         if(meta&&meta.extra&&meta.extra.investigation)continue;
         const reason=`Koin mencurigakan (${coins}). Sistem menandai investigasi otomatis.`;
         try{
@@ -1296,7 +1322,7 @@ async function lobby(){
   await ensureMeta();if(isBanned()){showBan();return}await ensureStats(ACC?.name);await enforceAntiCheat("lobby");try{globalPatrolTick()}catch(e){};if(!window._gpInt)window._gpInt=setInterval(()=>{try{globalPatrolTick()}catch(e){}},5*60*1000);
   const name=ACC?.name||"Pemain";const lvl=statsRow?.level||1;const exp=statsRow?.exp||0;
   $("app").innerHTML=`<div class="hero"><h1>🌍 BATTLE OF THE NATIONS</h1><p>Lobby</p></div>
-  <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>👤 <b>${esc(name)}</b> ${roleBadge(getRole())}</span><span class="rank">Lv ${lvl} · ${getRank((lvl||1)*100+exp)}</span></div>
+  <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span>👤 ${nameRole(name,getRole())}</span><span class="rank">Lv ${lvl} · ${getRank((lvl||1)*100+exp)}</span></div>
   <p class="mu" style="margin-top:6px">ID: ${uid}</p>
   <p style="margin-top:10px;font-size:22px;font-weight:800">🪙 ${coins} <span class="mu" style="font-size:13px">Koin</span></p>
   <button class="btn-gray" style="width:100%;margin-top:10px" onclick="logoutAccount()">🚪 Logout / Ganti Akun</button>
